@@ -27,6 +27,15 @@ struct User_Commands
 	int tnr; // topology-names-routing
 };
 
+struct Node
+{
+	int net;
+	int id;
+	char *ip;
+	char *port;
+	int fd;
+};
+
 /*Returns a string containing the IP of this local machine (XXX.XXX.XXX.XXX)
 which needs to be freed after use*/
 char *Own_IP()
@@ -128,37 +137,178 @@ void Process_Console_Arguments(int argc, char *argv[], char myip[128], char mypo
 	strcpy(nodeport, argv[4]);
 }
 
-void djoin(struct User_Commands *commands)
+int djoin(struct User_Commands *commands, char *myip, char *myport, char *nodesip, char *nodesport)
 {
+	int fd;
+	struct addrinfo hints, *res;
+	if (commands->id == commands->bootid) /*Primeiro nó da rede*/
+	{
+		char message[128];
+		int n_received;
+		sprintf(message, "REG %03i %02i %s %s", commands->net, commands->id, myip, myport);
+		printf("VOU MANDAR %s\n", message);
+		char *received = transrecieveUDP(nodesip, nodesport, message, strlen(message), &n_received);
+		if (strcmp(received, "OKREG") != 0)
+		{
+			printf("ERRO: REG NÃO RESPONDEU OKREG\nRESPONDEU %s\n", received);
+			exit(1);
+		}
+		else
+			return 0;
+	}
+	else if (commands->id != commands->bootid) /*Conectar a algum nó da rede*/
+	{										   // epa isto deve tar certo mas muita calma
+											   //  if ((fd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+											   //  {
+											   //  	printf("error: %s\n", strerror(errno));
+											   //  	exit(1);
+											   //  }
+											   //  memset(&hints, 0, sizeof(hints));
+											   //  hints.ai_family = AF_INET;
+											   //  hints.ai_socktype = SOCK_STREAM;
+											   //  if (getaddrinfo(commands->bootip, commands->bootport, &hints, &res) != 0)
+											   //  {
+											   //  	printf("error: %s\n", strerror(errno));
+											   //  	exit(1);
+											   //  }
+											   //  if (connect(fd, res->ai_addr, res->ai_addrlen) == -1)
+											   //  {
+											   //  	printf("error: %s\n", strerror(errno));
+											   //  	exit(1);
+											   //  }
+											   // char to_send[128];
+											   // sprintf(to_send, "NEW %s %s\n", myip, myport);
+											   //  if (write(fd, to_send, strlen(to_send)) == -1)
+											   //  {
+											   //  	printf("error: %s\n", strerror(errno));
+											   //  	exit(1);
+											   //  }
+	}
+}
 
+void missing_arguments()
+{
+	printf(" Faltam argumentos! \n");
 }
 
 void Process_User_Commands(char message[128], struct User_Commands *commands)
 {
-	char *tok = strtok(message, " ");
-	if (strcmp(tok, "join") == 0)
-	{ /*TODO*/
+	char string[100] = "exit";
+	char *token = strtok(string, " ");
+
+	// join net id
+	if (strcmp(token, "join") == 0)
+	{
+		token = strtok(NULL, " ");
+		for (int k = 0; k < 2; k++)
+		{
+			if (token == NULL) // certifica que tem o numero de argumentos necessários
+			{
+				missing_arguments();
+				exit(1);
+			}
+			printf("Ciclo join: %s\n", token);
+			token = strtok(NULL, " ");
+		}
 	}
-	else if (strcmp(tok, "djoin") == 0)
-	{ /*TODO*/
+
+	// djoin net id bootid bootIP bootTCP
+	if (strcmp(token, "djoin") == 0)
+	{
+		token = strtok(NULL, " ");
+		for (int k = 0; k < 5; k++)
+		{
+			if (token == NULL) // certifica que tem o numero de argumentos necessários
+			{
+				missing_arguments();
+				exit(1);
+			}
+			printf("Ciclo djoin: %s\n", token);
+			token = strtok(NULL, " ");
+		}
 	}
-	else if (strcmp(tok, "create") == 0)
-	{ /*TODO*/
+
+	// create name
+	if (strcmp(token, "create") == 0)
+	{
+		token = strtok(NULL, " ");
+		if (token == NULL)
+		{
+			missing_arguments();
+			exit(1);
+		}
+		else if (strcmp(token, "name") == 0)
+		{
+			printf("You are in create name! \n");
+		}
 	}
-	else if (strcmp(tok, "delete") == 0)
-	{ /*TODO*/
+
+	// delete name
+	if (strcmp(token, "delete") == 0)
+	{
+		token = strtok(NULL, " ");
+		if (token == NULL)
+		{
+			missing_arguments();
+			exit(1);
+		}
+		else if (strcmp(token, "name") == 0)
+		{
+			printf("You are in delete name! \n");
+		}
 	}
-	else if (strcmp(tok, "get") == 0)
-	{ /*TODO*/
+
+	// get dest name
+	if (strcmp(token, "get") == 0)
+	{
+		token = strtok(NULL, " ");
+		for (int k = 0; k < 2; k++)
+		{
+			if (token == NULL) // certifica que tem o numero de argumentos necessários
+			{
+				missing_arguments();
+				exit(1);
+			}
+			printf("Ciclo join: %s\n", token);
+			token = strtok(NULL, " ");
+		}
 	}
-	else if (strcmp(tok, "show") == 0)
-	{ /*TODO*/
+
+	// show topology || show names || show routing
+	if (strcmp(token, "show") == 0)
+	{
+		token = strtok(NULL, " ");
+		if (token == NULL)
+		{
+			missing_arguments();
+			exit(1);
+		}
+		else if (strcmp(token, "topology") == 0)
+		{
+			printf("You are in show topology! \n");
+		}
+		else if (strcmp(token, "names") == 0)
+		{
+			printf("You are in show names! \n");
+		}
+		else if (strcmp(token, "routing") == 0)
+		{
+			printf("You are in show routing! \n");
+		}
+		else
+		{
+			printf("Not valid! \n");
+		}
 	}
-	else if (strcmp(tok, "leave") == 0)
-	{ /*TODO*/
+
+	if (strcmp(token, "leave") == 0)
+	{
+		printf("Bye bye borboletinha! \n");
 	}
-	else if (strcmp(tok, "exit") == 0)
-	{ /*TODO*/
+
+	if (strcmp(token, "exit") == 0)
+	{
+		exit(0);
 	}
 }
 
@@ -254,4 +404,10 @@ int main(int argc, char *argv[])
 		}
 	}
 	return 0;
+	// //-------------------------meu codigo----------------------------
+	// char myip[128], myport[128], nodeip[128], nodeport[128];
+	// Process_Console_Arguments(argc, argv, myip, myport, nodeip, nodeport);
+	// struct User_Commands comms = (struct User_Commands){2, 37, 99, 99, "172.29.69.7", "58001", "qq", 2};
+	// djoin(&comms, myip, myport, nodeip, nodeport);
+	// //-------------------------meu codigo----------------------------
 }
