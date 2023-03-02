@@ -4,11 +4,17 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
+#include <sys/select.h>
+#include <sys/time.h>
 #include <netinet/in.h>
 #include <net/if.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <errno.h>
+
+#define max(A, B) ((A) >= (B) ? (A) : (B))
+
 /*Returns a string containing the IP of this local machine (XXX.XXX.XXX.XXX)
 which needs to be freed after use*/
 char *Own_IP()
@@ -34,7 +40,7 @@ char *Own_IP()
 server with IP [ip] and PORT [port]. Returns the response of the server in a string that needs
 to be freed after use and puts the number of chars read in [n_read]
 */
-char *Transrecieve_UDP(char *ip, char *port, char *m_tosend, unsigned int n_send, unsigned int *n_read)
+char *transrecieveUDP(char *ip, char *port, char *m_tosend, unsigned int n_send, unsigned int *n_read)
 {
 	int fd_udp, errcode;
 	ssize_t n;
@@ -54,13 +60,14 @@ char *Transrecieve_UDP(char *ip, char *port, char *m_tosend, unsigned int n_send
 		exit(1);
 	}
 	n = sendto(fd_udp, m_tosend, n_send, 0, res->ai_addr, res->ai_addrlen);
-	free(res);
+	freeaddrinfo(res);
 	if (n == -1) /*error*/
 		exit(1);
 	char *buffer = (char *)calloc((256 << 5), sizeof(char));
 	addrlen = sizeof(addr);
 	n = recvfrom(fd_udp, buffer, 256 << 5, 0,
 				 (struct sockaddr *)&addr, &addrlen);
+	close(fd_udp);
 	if (n == -1) /*error*/
 		exit(1);
 	char *ret = (char *)calloc(strlen(buffer) + 1, sizeof(char));
@@ -70,11 +77,136 @@ char *Transrecieve_UDP(char *ip, char *port, char *m_tosend, unsigned int n_send
 	return ret;
 }
 
-int main()
+/*Returns the file descriptor of the listening socket in port [port]*/
+int openListenTCP(char *port)
 {
-	unsigned int n_read;
-	char *mensagem = Transrecieve_UDP("193.136.138.142", "59000", "NODES 037", 10, &n_read);
-	printf("\n%s\n", mensagem);
-	free(mensagem);
+	struct addrinfo hints, *res;
+	int fd, errcode;
+	if ((fd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+	{
+		printf("error: %s\n", strerror(errno));
+		exit(1);
+	}
+	struct sockaddr_in address;
+	memset(&address, 0, sizeof(address));
+	address.sin_family = AF_INET;
+	address.sin_addr.s_addr = INADDR_ANY;
+	address.sin_port = htons(atoi(port));
+	if (bind(fd, (struct sockaddr *)(&address), sizeof(address)) == -1)
+	{
+		printf("error: %s\n", strerror(errno));
+		exit(1);
+	}
+
+	if (listen(fd, 5) == -1)
+	{
+		printf("error: %s\n", strerror(errno));
+		exit(1);
+	}
+	return fd;
+}
+
+void Process_Arguments(int argc, char *argv[], char myip[128], char myport[128], char nodeip[128], char nodeport[128])
+{
+	if (argc != 5)
+		exit(1);
+	strcpy(myip, argv[1]);
+	strcpy(myport, argv[2]);
+	strcpy(nodeip, argv[3]);
+	strcpy(nodeport, argv[4]);
+}
+
+int main(int argc, char *argv[])
+{
+	int max_fd, counter, comms_fd, n, nw;
+	char buffer1[128], *buffer2;
+	int connections[100] = {0};
+	int num_connections = 0;
+	fd_set rfds;
+	struct sockaddr addr;
+	socklen_t addrlen;
+	char myip[128], myport[128], nodeip[128], nodeport[128];
+	printf("\n%s\n", Own_IP());
+	Process_Arguments(argc, argv, myip, myport, nodeip, nodeport);
+	int listen_fd = openListenTCP(myport);
+	max_fd = listen_fd;
+	while (1)
+	{
+		FD_ZERO(&rfds);
+		FD_SET(STDIN_FILENO, &rfds);
+		FD_SET(listen_fd, &rfds);
+		for (int temp = num_connections - 1; temp >= 0; temp--)
+		{
+			FD_SET(connections[temp], &rfds);
+		}
+		counter = select(max_fd + 1, &rfds, (fd_set *)NULL, (fd_set *)NULL, (struct timeval *)NULL);
+		if (counter <= 0)
+		{
+			printf("error: %s\n", strerror(errno));
+			exit(1);
+		}
+		if (FD_ISSET(listen_fd, &rfds))
+		{
+			FD_CLR(listen_fd, &rfds);
+			printf("\nALGUEM SE LIGOU\n");
+			addrlen = sizeof(addr);
+			if ((comms_fd = accept(listen_fd, &addr, &addrlen)) == -1)
+			{
+				printf("error: %s\n", strerror(errno));
+				exit(1);
+			}
+			printf("NO FILE DESCRIPTOR %i\n", comms_fd);
+			connections[num_connections++] = comms_fd;
+			max_fd = max(max_fd, comms_fd);
+			counter--;
+		}
+		if (FD_ISSET(STDIN_FILENO, &rfds))
+		{
+			FD_CLR(STDIN_FILENO, &rfds);
+			if (fgets(buffer1, 128, stdin))
+			{
+				printf("%s", buffer1);
+			}
+			else
+			{
+				printf("error: %s\n", strerror(errno));
+				exit(1);
+			}
+			counter--;
+		}
+		for (; counter /*>0*/; --counter)
+		{
+			for (int i = num_connections - 1; i >= 0; i--)
+			{
+				if (FD_ISSET(connections[i], &rfds))
+				{
+					FD_CLR(connections[i], &rfds);
+					if ((n = read(connections[i], buffer1, 128)) != -1)
+					{
+						strcpy(buffer2, buffer1);
+						while (n > 0)
+						{
+							if ((nw = write(connections[i], buffer2, n)) != -1)
+							{
+
+								n -= nw;
+								buffer2 += nw;
+							}
+							else
+							{
+								printf("error: %s\n", strerror(errno));
+								exit(1);
+							}
+						}
+					}
+					else
+					{
+						printf("error: %s\n", strerror(errno));
+						exit(1);
+					}
+				}
+			}
+		}
+	}
 	return 0;
 }
