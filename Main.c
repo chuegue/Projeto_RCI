@@ -31,9 +31,22 @@ struct Node
 {
 	int net;
 	int id;
-	char *ip;
-	char *port;
+	char ip[128];
+	char port[128];
 	int fd;
+};
+
+struct Neighborhood
+{
+	int ve;
+	int vb;
+	int vi[100];
+	int n_vi;
+};
+
+struct Exp_Table
+{
+	int forward[100];
 };
 
 /*Returns a string containing the IP of this local machine (XXX.XXX.XXX.XXX)
@@ -137,7 +150,7 @@ void Process_Console_Arguments(int argc, char *argv[], char myip[128], char mypo
 	strcpy(nodeport, argv[4]);
 }
 
-int djoin(struct User_Commands *commands, char *myip, char *myport, char *nodesip, char *nodesport)
+void djoin(struct User_Commands *commands, struct Node self, struct Neighborhood *nb, struct Exp_Table *expt, char *nodesip, char *nodesport)
 {
 	int fd;
 	struct addrinfo hints, *res;
@@ -145,44 +158,51 @@ int djoin(struct User_Commands *commands, char *myip, char *myport, char *nodesi
 	{
 		char message[128];
 		int n_received;
-		sprintf(message, "REG %03i %02i %s %s", commands->net, commands->id, myip, myport);
+		sprintf(message, "REG %03i %02i %s %s", commands->net, commands->id, self.ip, self.port);
 		printf("VOU MANDAR %s\n", message);
 		char *received = transrecieveUDP(nodesip, nodesport, message, strlen(message), &n_received);
 		if (strcmp(received, "OKREG") != 0)
 		{
+			free(received);
 			printf("ERRO: REG NÃO RESPONDEU OKREG\nRESPONDEU %s\n", received);
 			exit(1);
 		}
-		else
-			return 0;
+		free(received);
+		nb->vb = self.id;
+		nb->ve = -1;
+		nb->n_vi = 0;
+		memset((void *)nb->vi, 0x00, 100 * sizeof(int));
+		memset((void *)expt->forward, 0xFF, 100 * sizeof(int));
+		return;
 	}
 	else if (commands->id != commands->bootid) /*Conectar a algum nó da rede*/
-	{										   // epa isto deve tar certo mas muita calma
-											   //  if ((fd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
-											   //  {
-											   //  	printf("error: %s\n", strerror(errno));
-											   //  	exit(1);
-											   //  }
-											   //  memset(&hints, 0, sizeof(hints));
-											   //  hints.ai_family = AF_INET;
-											   //  hints.ai_socktype = SOCK_STREAM;
-											   //  if (getaddrinfo(commands->bootip, commands->bootport, &hints, &res) != 0)
-											   //  {
-											   //  	printf("error: %s\n", strerror(errno));
-											   //  	exit(1);
-											   //  }
-											   //  if (connect(fd, res->ai_addr, res->ai_addrlen) == -1)
-											   //  {
-											   //  	printf("error: %s\n", strerror(errno));
-											   //  	exit(1);
-											   //  }
-											   // char to_send[128];
-											   // sprintf(to_send, "NEW %s %s\n", myip, myport);
-											   //  if (write(fd, to_send, strlen(to_send)) == -1)
-											   //  {
-											   //  	printf("error: %s\n", strerror(errno));
-											   //  	exit(1);
-											   //  }
+	{// epa isto deve tar certo mas muita calma
+		if ((fd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+		{
+			printf("error: %s\n", strerror(errno));
+			exit(1);
+		}
+		memset(&hints, 0, sizeof(hints));
+		hints.ai_family = AF_INET;
+		hints.ai_socktype = SOCK_STREAM;
+		if (getaddrinfo(commands->bootip, commands->bootport, &hints, &res) != 0)
+		{
+			printf("error: %s\n", strerror(errno));
+			exit(1);
+		}
+		if (connect(fd, res->ai_addr, res->ai_addrlen) == -1)
+		{
+			printf("error: %s\n", strerror(errno));
+			exit(1);
+		}
+		char buffer[128];
+		sprintf(buffer, "NEW %s %s\n", self.ip, self.port);
+		if (write(fd, buffer, strlen(buffer)) == -1)
+		{
+			printf("error: %s\n", strerror(errno));
+			exit(1);
+		}
+		/*agora ouvir a resposta... como? (pergunta o francisco do passado. Com sorte o francisco do futuro saberá a resposta)*/
 	}
 }
 
@@ -408,6 +428,13 @@ int main(int argc, char *argv[])
 	// char myip[128], myport[128], nodeip[128], nodeport[128];
 	// Process_Console_Arguments(argc, argv, myip, myport, nodeip, nodeport);
 	// struct User_Commands comms = (struct User_Commands){2, 37, 99, 99, "172.29.69.7", "58001", "qq", 2};
-	// djoin(&comms, myip, myport, nodeip, nodeport);
+	// struct Node self;
+	// struct Neighborhood nb;
+	// struct Exp_Table expt;
+	// self.net = 37;
+	// self.id = 99;
+	// strcpy(self.port, myport);
+	// strcpy(self.ip, myip);
+	// djoin(&comms, self, &nb, &expt, nodeip, nodeport);
 	// //-------------------------meu codigo----------------------------
 }
