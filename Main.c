@@ -15,6 +15,18 @@
 
 #define max(A, B) ((A) >= (B) ? (A) : (B))
 
+struct User_Commands
+{
+	int command;
+	int net;
+	int id;
+	int bootid;
+	char bootip[128];
+	char bootport[128];
+	char name[128];
+	int tnr; // topology-names-routing
+};
+
 /*Returns a string containing the IP of this local machine (XXX.XXX.XXX.XXX)
 which needs to be freed after use*/
 char *Own_IP()
@@ -106,7 +118,7 @@ int openListenTCP(char *port)
 	return fd;
 }
 
-void Process_Arguments(int argc, char *argv[], char myip[128], char myport[128], char nodeip[128], char nodeport[128])
+void Process_Console_Arguments(int argc, char *argv[], char myip[128], char myport[128], char nodeip[128], char nodeport[128])
 {
 	if (argc != 5)
 		exit(1);
@@ -114,6 +126,40 @@ void Process_Arguments(int argc, char *argv[], char myip[128], char myport[128],
 	strcpy(myport, argv[2]);
 	strcpy(nodeip, argv[3]);
 	strcpy(nodeport, argv[4]);
+}
+
+void djoin(struct User_Commands *commands)
+{
+
+}
+
+void Process_User_Commands(char message[128], struct User_Commands *commands)
+{
+	char *tok = strtok(message, " ");
+	if (strcmp(tok, "join") == 0)
+	{ /*TODO*/
+	}
+	else if (strcmp(tok, "djoin") == 0)
+	{ /*TODO*/
+	}
+	else if (strcmp(tok, "create") == 0)
+	{ /*TODO*/
+	}
+	else if (strcmp(tok, "delete") == 0)
+	{ /*TODO*/
+	}
+	else if (strcmp(tok, "get") == 0)
+	{ /*TODO*/
+	}
+	else if (strcmp(tok, "show") == 0)
+	{ /*TODO*/
+	}
+	else if (strcmp(tok, "leave") == 0)
+	{ /*TODO*/
+	}
+	else if (strcmp(tok, "exit") == 0)
+	{ /*TODO*/
+	}
 }
 
 int main(int argc, char *argv[])
@@ -127,7 +173,7 @@ int main(int argc, char *argv[])
 	socklen_t addrlen;
 	char myip[128], myport[128], nodeip[128], nodeport[128];
 	printf("\n%s\n", Own_IP());
-	Process_Arguments(argc, argv, myip, myport, nodeip, nodeport);
+	Process_Console_Arguments(argc, argv, myip, myport, nodeip, nodeport);
 	int listen_fd = openListenTCP(myport);
 	max_fd = listen_fd;
 	while (1)
@@ -148,14 +194,13 @@ int main(int argc, char *argv[])
 		if (FD_ISSET(listen_fd, &rfds))
 		{
 			FD_CLR(listen_fd, &rfds);
-			printf("\nALGUEM SE LIGOU\n");
 			addrlen = sizeof(addr);
 			if ((comms_fd = accept(listen_fd, &addr, &addrlen)) == -1)
 			{
 				printf("error: %s\n", strerror(errno));
 				exit(1);
 			}
-			printf("NO FILE DESCRIPTOR %i\n", comms_fd);
+			printf("\nALGUÉM SE LIGOU NO FILE DESCRIPTOR %i\n", comms_fd);
 			connections[num_connections++] = comms_fd;
 			max_fd = max(max_fd, comms_fd);
 			counter--;
@@ -165,7 +210,7 @@ int main(int argc, char *argv[])
 			FD_CLR(STDIN_FILENO, &rfds);
 			if (fgets(buffer1, 128, stdin))
 			{
-				printf("%s", buffer1);
+				/*process message*/
 			}
 			else
 			{
