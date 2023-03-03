@@ -6,12 +6,12 @@
             "request": "launch",
             "program": "${fileDirname}/cot",
             "args": [
-                "172.25.85.26",
+                "172.25.240.51",
                 "58001",
                 "193.136.138.142",
                 "59000"
             ],
-            "stopAtEntry": false,
+            "stopAtEntry": true,
             "cwd": "${fileDirname}",
             "environment": [],
             "externalConsole": false,
