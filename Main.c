@@ -249,12 +249,32 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 	}
 }
 
+void leave(struct Node *self, struct Neighborhood *nb, struct Expedition_Table *expt, char *nodesip, char *nodesport)
+{
+	char message[128];
+	int n_received;
+
+	// terminação da sessão com o vizinho x
+	sprintf(message, "UNREG %03i %02i", self->net, self->id);
+	printf("VOU MANDAR %s\n", message);
+	char *received = transrecieveUDP(nodesip, nodesport, message, strlen(message), &n_received);
+	if (strcmp(received, "OKUNREG") != 0)
+	{
+		free(received);
+		printf("ERRO: UNREG NÃO RESPONDEU OKUNREG\nRESPONDEU %s\n", received);
+		exit(1);
+	}
+	free(received);
+
+	// como raio deteto que foi terminada uma sessao?
+}
+
 void missing_arguments()
 {
 	printf(" Faltam argumentos! \n");
 }
 
-void Process_User_Commands(char message[128], struct User_Commands *commands)
+void Process_User_Commands(char message[128], struct User_Commands *commands, struct Node *self, struct Node *other, struct Neighborhood *nb, struct Expedition_Table *expt, char *nodesip, char *nodesport)
 {
 	char *token = strtok(message, " ");
 
@@ -311,7 +331,8 @@ void Process_User_Commands(char message[128], struct User_Commands *commands)
 
 			token = strtok(NULL, " ");
 		}
-		return; // MUDAR ISTO!!!!!!!
+		djoin(commands, self, other, nb, expt, nodesip, nodesport);
+		return;
 	}
 
 	// create name
@@ -387,12 +408,14 @@ void Process_User_Commands(char message[128], struct User_Commands *commands)
 		}
 	}
 
-	if (strcmp(token, "leave") == 0)
+	if (strstr(message, "leave") != NULL)
 	{
 		printf("Bye bye borboletinha! \n");
+		leave(self, nb, expt, nodesip, nodesport);
+		return;
 	}
 
-	if (strcmp(token, "exit") == 0)
+	if (strstr(message, "leave") != NULL)
 	{
 		exit(0);
 	}
@@ -453,8 +476,7 @@ int main(int argc, char *argv[])
 			FD_CLR(STDIN_FILENO, &rfds);
 			if (fgets(buffer1, 128, stdin))
 			{
-				Process_User_Commands(buffer1, &usercomms);
-				djoin(&usercomms, &self, &other, &nb, &expt, nodeip, nodeport);
+				Process_User_Commands(buffer1, &usercomms, &self, &other, &nb, &expt, nodeip, nodeport);
 			}
 			else
 			{
@@ -465,6 +487,7 @@ int main(int argc, char *argv[])
 		}
 		for (; counter /*>0*/; --counter)
 		{
+			printf("ola entrei no counter\n");
 			for (int i = num_connections - 1; i >= 0; i--)
 			{
 				if (FD_ISSET(connections[i], &rfds))
@@ -473,6 +496,7 @@ int main(int argc, char *argv[])
 					if ((n = read(connections[i], buffer1, 128)) != -1)
 					{
 						/*PROCESS INCOMING MESSAGES*/
+						printf("%i \n", n);
 					}
 					else
 					{
