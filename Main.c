@@ -161,7 +161,7 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 		char message[128];
 		int n_received;
 		sprintf(message, "REG %03i %02i %s %s", commands->net, commands->id, self->ip, self->port);
-		printf("VOU MANDAR %s\n", message);
+		printf("EU ---> SERVIDOR DE NOS: %s\n", message);
 		char *received = transrecieveUDP(nodesip, nodesport, message, strlen(message), &n_received);
 		if (strcmp(received, "OKREG") != 0)
 		{
@@ -169,6 +169,7 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 			printf("ERRO: REG NÃO RESPONDEU OKREG\nRESPONDEU %s\n", received);
 			exit(1);
 		}
+		printf("EU <--- SERVIDOR DE NOS: %s\n", received);
 		free(received);
 		nb->backup = self->id;
 		nb->external = self->id;
@@ -198,46 +199,47 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 			exit(1);
 		}
 		char buffer[128];
-		sprintf(buffer, "NEW %s %s\n", self->ip, self->port);
+		sprintf(buffer, "NEW %02i %s %s\n", self->id, self->ip, self->port);
 		if (write(fd, buffer, strlen(buffer)) == -1)
 		{
 			printf("error: %s\n", strerror(errno));
 			exit(1);
 		}
+		printf("EU ---> FD nº%i: %s\n", fd, buffer);
 		/*agora ouvir a resposta... como? (pergunta o francisco do passado. Com sorte o francisco do futuro saberá a resposta)*/
 		/*o francisco do futuro já percebeu*/
-		if (read(fd, buffer, 128) == -1)
-		{
-			printf("error: %s\n", strerror(errno));
-			exit(1);
-		}
-		char *tok = strtok(buffer, " ");
-		if (strcmp(tok, "EXTERN") != 0)
-		{
-			printf("ERRO NO DJOIN. O OUTRO NÓ RESPONDEU %s\n", buffer);
-			exit(1);
-		}
+		// if (read(fd, buffer, 128) == -1)
+		// {
+		// 	printf("error: %s\n", strerror(errno));
+		// 	exit(1);
+		// }
+		// char *tok = strtok(buffer, " ");
+		// if (strcmp(tok, "EXTERN") != 0)
+		// {
+		// 	printf("ERRO NO DJOIN. O OUTRO NÓ RESPONDEU %s\n", buffer);
+		// 	exit(1);
+		// }
 		self->net = commands->net;
 		self->id = commands->id;
-		tok = strtok(NULL, " ");
-		nb->backup = atoi(tok);
+		// tok = strtok(NULL, " ");
+		// nb->backup = atoi(tok);
 		nb->external = commands->bootid;
 		nb->n_internal = 0;
 		memset((void *)nb->internal, 0xFF, 100 * sizeof(int));
 		expt->forward[commands->bootid] = commands->bootid;
-		expt->forward[nb->backup] = commands->bootid;
-		tok = strtok(NULL, " ");
+		// expt->forward[nb->backup] = commands->bootid;
+		// tok = strtok(NULL, " ");
 		other->fd = fd;
 		other->id = commands->bootid;
-		strcpy(other->ip, tok);
-		tok = strtok(NULL, " ");
-		strcpy(other->port, tok);
-		(other->port)[strlen(other->port) - 1] = '\0';
+		strcpy(other->ip, commands->bootip);
+		// tok = strtok(NULL, " ");
+		strcpy(other->port, commands->bootport);
+		//(other->port)[strlen(other->port) - 1] = '\0';
 		other->net = commands->net;
 		char message[128];
 		int n_received;
 		sprintf(message, "REG %03i %02i %s %s", commands->net, commands->id, self->ip, self->port);
-		printf("VOU MANDAR %s\n", message);
+		printf("EU ---> SERVIDOR DE NOS: %s\n", message);
 		char *received = transrecieveUDP(nodesip, nodesport, message, strlen(message), &n_received);
 		if (strcmp(received, "OKREG") != 0)
 		{
@@ -245,6 +247,7 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 			printf("ERRO: REG NÃO RESPONDEU OKREG\nRESPONDEU %s\n", received);
 			exit(1);
 		}
+		printf("EU <--- SERVIDOR DE NOS: %s\n", received);
 		free(received);
 	}
 }
@@ -256,7 +259,7 @@ void leave(struct Node *self, struct Neighborhood *nb, struct Expedition_Table *
 
 	// terminação da sessão com o vizinho x
 	sprintf(message, "UNREG %03i %02i", self->net, self->id);
-	printf("VOU MANDAR %s\n", message);
+	printf("EU ---> SERVIDOR DE NOS: %s\n", message);
 	char *received = transrecieveUDP(nodesip, nodesport, message, strlen(message), &n_received);
 	if (strcmp(received, "OKUNREG") != 0)
 	{
@@ -264,6 +267,7 @@ void leave(struct Node *self, struct Neighborhood *nb, struct Expedition_Table *
 		printf("ERRO: UNREG NÃO RESPONDEU OKUNREG\nRESPONDEU %s\n", received);
 		exit(1);
 	}
+	printf("EU <--- SERVIDOR DE NOS: %s\n", received);
 	free(received);
 
 	// como raio deteto que foi terminada uma sessao?
@@ -289,7 +293,6 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 				missing_arguments();
 				exit(1);
 			}
-			printf("Ciclo join: %s\n", token);
 			token = strtok(NULL, " ");
 		}
 	}
@@ -410,12 +413,11 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 
 	if (strstr(message, "leave") != NULL)
 	{
-		printf("Bye bye borboletinha! \n");
 		leave(self, nb, expt, nodesip, nodesport);
 		return;
 	}
 
-	if (strstr(message, "leave") != NULL)
+	if (strstr(message, "exit") != NULL)
 	{
 		exit(0);
 	}
@@ -424,14 +426,15 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 int main(int argc, char *argv[])
 {
 	int max_fd, counter, comms_fd, n, nw;
-	char buffer1[128], *buffer2;
-	int connections[100] = {0};
+	char buffer1[128], message[128], *buffer2;
+	// int connections[100] = {0};
+	struct Node my_connections[100] = {0}; // array of others
 	int num_connections = 0;
 	fd_set rfds;
 	struct sockaddr addr;
 	socklen_t addrlen;
 	char myip[128], myport[128], nodeip[128], nodeport[128];
-	printf("\n%s\n", Own_IP());
+	// printf("\n%s\n", Own_IP());
 	Process_Console_Arguments(argc, argv, myip, myport, nodeip, nodeport);
 	struct Node self, other;
 	struct Neighborhood nb;
@@ -449,7 +452,7 @@ int main(int argc, char *argv[])
 		FD_SET(listen_fd, &rfds);
 		for (int temp = num_connections - 1; temp >= 0; temp--)
 		{
-			FD_SET(connections[temp], &rfds);
+			FD_SET(my_connections[temp].fd, &rfds);
 		}
 		counter = select(max_fd + 1, &rfds, (fd_set *)NULL, (fd_set *)NULL, (struct timeval *)NULL);
 		if (counter <= 0)
@@ -466,8 +469,8 @@ int main(int argc, char *argv[])
 				printf("error: %s\n", strerror(errno));
 				exit(1);
 			}
-			printf("\nALGUÉM SE LIGOU NO FILE DESCRIPTOR %i\n", comms_fd);
-			connections[num_connections++] = comms_fd;
+			printf("\nCONNECTION IN FILE DESCRIPTOR Nº%i\n", comms_fd);
+			my_connections[num_connections++].fd = comms_fd;
 			max_fd = max(max_fd, comms_fd);
 			counter--;
 		}
@@ -487,16 +490,46 @@ int main(int argc, char *argv[])
 		}
 		for (; counter /*>0*/; --counter)
 		{
-			printf("ola entrei no counter\n");
 			for (int i = num_connections - 1; i >= 0; i--)
 			{
-				if (FD_ISSET(connections[i], &rfds))
+				if (FD_ISSET(my_connections[i].fd, &rfds))
 				{
-					FD_CLR(connections[i], &rfds);
-					if ((n = read(connections[i], buffer1, 128)) != -1)
+					FD_CLR(my_connections[i].fd, &rfds);
+					if ((n = read(my_connections[i].fd, buffer1, 128)) != -1)
 					{
 						/*PROCESS INCOMING MESSAGES*/
-						printf("%i \n", n);
+						printf("EU <--- FD nº%i: %s\n", my_connections[i].fd, buffer1);
+						char *token = strtok(buffer1, " ");
+						if (strcmp(token, "NEW") == 0)
+						{
+							token = strtok(NULL, " ");
+							for (int k = 0; k < 2; k++)
+							{
+								if (token == NULL) // certifica que tem o numero de argumentos necessários
+								{
+									missing_arguments();
+									exit(1);
+								}
+								switch (k)
+								{
+								case 0:
+									strcpy(my_connections[i].ip, token);
+									// printf("IP DO MENINO QUE SE JUNTOU: %s\n", my_connections[i].ip);
+									break;
+								case 1:
+									strcpy(my_connections[i].port, token);
+									// printf("PORT DO MENINO QUE SE JUNTOU: %s\n", my_connections[i].port);
+									break;
+								}
+							}
+							sprintf(message, "EXTERN %02i %s %s", nb.external, self.ip, self.port);
+							if (write(my_connections[i].fd, message, strlen(message)) == -1)
+							{
+								printf("error: %s\n", strerror(errno));
+								exit(1);
+							}
+							printf("EU ---> FD nº%i: %s\n", my_connections[i].fd, message);
+						}
 					}
 					else
 					{
