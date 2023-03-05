@@ -497,6 +497,8 @@ int main(int argc, char *argv[])
 					FD_CLR(my_connections[i].fd, &rfds);
 					if ((n = read(my_connections[i].fd, buffer1, 128)) != -1)
 					{
+						char *pos = strchr(buffer1, '\n');
+						*(pos + 1) = '\0';
 						/*PROCESS INCOMING MESSAGES*/
 						printf("EU <--- FD nº%i: %s\n", my_connections[i].fd, buffer1);
 						char *token = strtok(buffer1, " ");
