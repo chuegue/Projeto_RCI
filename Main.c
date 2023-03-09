@@ -114,8 +114,7 @@ char *transrecieveUDP(char *ip, char *port, char *m_tosend, unsigned int n_send,
 /*Returns the file descriptor of the listening socket in port [port]*/
 int openListenTCP(char *port)
 {
-	struct addrinfo hints, *res;
-	int fd, errcode;
+	int fd;
 	if ((fd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
 	{
 		printf("error: %s\n", strerror(errno));
@@ -150,6 +149,20 @@ void Process_Console_Arguments(int argc, char *argv[], char myip[128], char mypo
 	strcpy(nodeport, argv[4]);
 }
 
+// char message[128];
+// 		int n_received;
+// 		sprintf(message, "REG %03i %02i %.32s %.8s", commands->net, commands->id, self->ip, self->port);
+// 		printf("EU ---> SERVIDOR DE NOS: %s\n", message);
+// 		char *received = transrecieveUDP(nodesip, nodesport, message, strlen(message), &n_received);
+// 		if (strcmp(received, "OKREG") != 0)
+// 		{
+// 			free(received);
+// 			printf("ERRO: REG NÃO RESPONDEU OKREG\nRESPONDEU %s\n", received);
+// 			exit(1);
+// 		}
+// 		printf("EU <--- SERVIDOR DE NOS: %s\n", received);
+// 		free(received);
+
 void djoin(struct User_Commands *commands, struct Node *self, struct Node *other, struct Neighborhood *nb, struct Expedition_Table *expt, char *nodesip, char *nodesport)
 {
 	int fd;
@@ -158,19 +171,8 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 	self->id = commands->id;
 	if (commands->id == commands->bootid) /*Primeiro nó da rede*/
 	{
-		char message[128];
-		int n_received;
-		sprintf(message, "REG %03i %02i %s %s", commands->net, commands->id, self->ip, self->port);
-		printf("EU ---> SERVIDOR DE NOS: %s\n", message);
-		char *received = transrecieveUDP(nodesip, nodesport, message, strlen(message), &n_received);
-		if (strcmp(received, "OKREG") != 0)
-		{
-			free(received);
-			printf("ERRO: REG NÃO RESPONDEU OKREG\nRESPONDEU %s\n", received);
-			exit(1);
-		}
-		printf("EU <--- SERVIDOR DE NOS: %s\n", received);
-		free(received);
+		other->id = -1;
+		other->fd = -1;
 		nb->backup = self->id;
 		nb->external = self->id;
 		nb->n_internal = 0;
@@ -199,63 +201,30 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 			exit(1);
 		}
 		char buffer[128];
-		sprintf(buffer, "NEW %02i %s %s\n", self->id, self->ip, self->port);
+		sprintf(buffer, "NEW %02i %.32s %.8s\n", self->id, self->ip, self->port);
 		if (write(fd, buffer, strlen(buffer)) == -1)
 		{
 			printf("error: %s\n", strerror(errno));
 			exit(1);
 		}
 		printf("EU ---> FD nº%i: %s\n", fd, buffer);
-		/*agora ouvir a resposta... como? (pergunta o francisco do passado. Com sorte o francisco do futuro saberá a resposta)*/
-		/*o francisco do futuro já percebeu*/
-		// if (read(fd, buffer, 128) == -1)
-		// {
-		// 	printf("error: %s\n", strerror(errno));
-		// 	exit(1);
-		// }
-		// char *tok = strtok(buffer, " ");
-		// if (strcmp(tok, "EXTERN") != 0)
-		// {
-		// 	printf("ERRO NO DJOIN. O OUTRO NÓ RESPONDEU %s\n", buffer);
-		// 	exit(1);
-		// }
-		self->net = commands->net;
-		self->id = commands->id;
-		// tok = strtok(NULL, " ");
-		// nb->backup = atoi(tok);
 		nb->external = commands->bootid;
 		nb->n_internal = 0;
 		memset((void *)nb->internal, 0xFF, 100 * sizeof(int));
+		memset((void *)expt->forward, 0xFF, 100 * sizeof(int));
 		expt->forward[commands->bootid] = commands->bootid;
-		// expt->forward[nb->backup] = commands->bootid;
-		// tok = strtok(NULL, " ");
 		other->fd = fd;
 		other->id = commands->bootid;
 		strcpy(other->ip, commands->bootip);
-		// tok = strtok(NULL, " ");
 		strcpy(other->port, commands->bootport);
-		//(other->port)[strlen(other->port) - 1] = '\0';
 		other->net = commands->net;
-		char message[128];
-		int n_received;
-		sprintf(message, "REG %03i %02i %s %s", commands->net, commands->id, self->ip, self->port);
-		printf("EU ---> SERVIDOR DE NOS: %s\n", message);
-		char *received = transrecieveUDP(nodesip, nodesport, message, strlen(message), &n_received);
-		if (strcmp(received, "OKREG") != 0)
-		{
-			free(received);
-			printf("ERRO: REG NÃO RESPONDEU OKREG\nRESPONDEU %s\n", received);
-			exit(1);
-		}
-		printf("EU <--- SERVIDOR DE NOS: %s\n", received);
-		free(received);
 	}
 }
 
 void leave(struct Node *self, struct Neighborhood *nb, struct Expedition_Table *expt, char *nodesip, char *nodesport)
 {
 	char message[128];
-	int n_received;
+	unsigned int n_received;
 
 	// terminação da sessão com o vizinho x
 	sprintf(message, "UNREG %03i %02i", self->net, self->id);
@@ -285,6 +254,7 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 	// join net id
 	if (strcmp(token, "join") == 0)
 	{
+		commands->command = 1;
 		token = strtok(NULL, " ");
 		for (int k = 0; k < 2; k++)
 		{
@@ -293,8 +263,20 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 				missing_arguments();
 				exit(1);
 			}
+			switch (k)
+			{
+			case 0:
+				commands->net = atoi(token);
+				break;
+			case 1:
+				commands->id = atoi(token);
+				break;
+			default:
+				break;
+			}
 			token = strtok(NULL, " ");
 		}
+		return;
 	}
 
 	// djoin net id bootid bootIP bootTCP
@@ -413,6 +395,7 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 
 	if (strstr(message, "leave") != NULL)
 	{
+		commands->command = 9;
 		leave(self, nb, expt, nodesip, nodesport);
 		return;
 	}
@@ -425,78 +408,94 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 
 void Process_Incoming_Messages(struct Node node_conections, struct Node self, struct Neighborhood nb, char incoming_message[128])
 {
-    char outgoing_message[128] = {0};
-    printf("EU <--- FD nº%i: %s\n", node_conections.fd, incoming_message);
-    char *token = strtok(incoming_message, " ");
-    if (strcmp(token, "NEW") == 0)
-    {
-        token = strtok(NULL, " ");
-        for (int k = 0; k < 2; k++)
-        {
-            if (token == NULL) // certifica que tem o numero de argumentos necessários
-            {
-                missing_arguments();
-                exit(1);
-            }
-            switch (k)
-            {
-            case 0:
-                strcpy(node_conections.ip, token);
-                // printf("IP DO MENINO QUE SE JUNTOU: %s\n", my_connections[i].ip);
-                break;
-            case 1:
-                strcpy(node_conections.port, token);
-                // printf("PORT DO MENINO QUE SE JUNTOU: %s\n", my_connections[i].port);
-                break;
-            }
-        }
-        sprintf(outgoing_message, "EXTERN %02i %s %s", nb.external, self.ip, self.port);
-        if (write(node_conections.fd, outgoing_message, strlen(outgoing_message)) == -1)
-        {
-            printf("error: %s\n", strerror(errno));
-            exit(1);
-        }
-        printf("EU ---> FD nº%i: %s\n", node_conections.fd, outgoing_message);
-    }
+	char outgoing_message[128] = {0};
+	printf("EU <--- FD nº%i: %s\n", node_conections.fd, incoming_message);
+	char *token = strtok(incoming_message, " ");
+	if (strcmp(token, "NEW") == 0)
+	{
+		token = strtok(NULL, " ");
+		for (int k = 0; k < 2; k++)
+		{
+			if (token == NULL) // certifica que tem o numero de argumentos necessários
+			{
+				missing_arguments();
+				exit(1);
+			}
+			switch (k)
+			{
+			case 0:
+				strcpy(node_conections.ip, token);
+				// printf("IP DO MENINO QUE SE JUNTOU: %s\n", my_connections[i].ip);
+				break;
+			case 1:
+				strcpy(node_conections.port, token);
+				// printf("PORT DO MENINO QUE SE JUNTOU: %s\n", my_connections[i].port);
+				break;
+			}
+		}
+		sprintf(outgoing_message, "EXTERN %02i %.32s %.8s\n", nb.external, self.ip, self.port);
+		if (write(node_conections.fd, outgoing_message, strlen(outgoing_message)) == -1)
+		{
+			printf("error: %s\n", strerror(errno));
+			exit(1);
+		}
+		printf("EU ---> FD nº%i: %s\n", node_conections.fd, outgoing_message);
+	}
 }
 
 int main(int argc, char *argv[])
 {
-	int max_fd, counter, comms_fd, n, nw;
-	char buffer1[128], message[128], *buffer2;
-	// int connections[100] = {0};
-	struct Node my_connections[100] = {0}; // array of others
-	int num_connections = 0;
+	// Declare variables
+	int max_fd, counter, listen_fd, comms_fd, n, num_connections = 0;
+	char buffer1[128], myip[128], myport[128], nodeip[128], nodeport[128];
+	struct User_Commands usercomms;
+	struct Node my_connections[100] = {0};
+	struct Node self, other = {0};
+	struct Neighborhood nb;
+	struct Expedition_Table expt;
 	fd_set rfds;
 	struct sockaddr addr;
 	socklen_t addrlen;
-	char myip[128], myport[128], nodeip[128], nodeport[128];
-	// printf("\n%s\n", Own_IP());
+
+	// Process console arguments
 	Process_Console_Arguments(argc, argv, myip, myport, nodeip, nodeport);
-	struct Node self, other;
-	struct Neighborhood nb;
-	struct Expedition_Table expt;
+
+	// Update "self" structure
 	strcpy(self.ip, myip);
 	strcpy(self.port, myport);
-	int listen_fd = openListenTCP(myport);
+
+	// Open a TCP port to listen for incoming connections
+	listen_fd = openListenTCP(myport);
+
+	// Update "self" structure
 	self.fd = listen_fd;
+
+	// set max_fd to listen_fd
 	max_fd = listen_fd;
-	struct User_Commands usercomms;
+
+	// Main loop
 	while (1)
 	{
+		// Set the standard input and listen fd's to be listened
 		FD_ZERO(&rfds);
 		FD_SET(STDIN_FILENO, &rfds);
 		FD_SET(listen_fd, &rfds);
+
+		// Set the fd's of connections to other users
 		for (int temp = num_connections - 1; temp >= 0; temp--)
 		{
 			FD_SET(my_connections[temp].fd, &rfds);
 		}
+
+		// Check which fd's are set
 		counter = select(max_fd + 1, &rfds, (fd_set *)NULL, (fd_set *)NULL, (struct timeval *)NULL);
 		if (counter <= 0)
 		{
 			printf("error: %s\n", strerror(errno));
 			exit(1);
 		}
+
+		// Check if there is any incoming new connections
 		if (FD_ISSET(listen_fd, &rfds))
 		{
 			FD_CLR(listen_fd, &rfds);
@@ -507,16 +506,42 @@ int main(int argc, char *argv[])
 				exit(1);
 			}
 			printf("\nCONNECTION IN FILE DESCRIPTOR Nº%i\n", comms_fd);
+
+			// Update array of connections to include the new fd
 			my_connections[num_connections++].fd = comms_fd;
+			// Update max_fd
 			max_fd = max(max_fd, comms_fd);
 			counter--;
 		}
+
+		// Check if there is any input in the standard input
 		if (FD_ISSET(STDIN_FILENO, &rfds))
 		{
 			FD_CLR(STDIN_FILENO, &rfds);
 			if (fgets(buffer1, 128, stdin))
 			{
 				Process_User_Commands(buffer1, &usercomms, &self, &other, &nb, &expt, nodeip, nodeport);
+
+				// According to the command given by the users, do what needs to be done to each of them
+				switch (usercomms.command)
+				{
+				case 2: // djoin
+					if (other.id != -1)
+					{
+						max_fd = max(max_fd, other.fd);
+						memcpy(&(my_connections[num_connections++]), &other, sizeof(struct Node));
+					}
+					break;
+				case 9: // leave
+					for (int i = 0; i < num_connections; i++)
+					{
+						close(my_connections[i].fd);
+					}
+					break;
+
+				default:
+					break;
+				}
 			}
 			else
 			{
@@ -525,21 +550,39 @@ int main(int argc, char *argv[])
 			}
 			counter--;
 		}
+
+		// Check for any incoming messages from other nodes
 		for (; counter /*>0*/; --counter)
 		{
+			// Loop through all of the other nodes
 			for (int i = num_connections - 1; i >= 0; i--)
 			{
+				// Check if a given fd has had any changes
 				if (FD_ISSET(my_connections[i].fd, &rfds))
 				{
 					FD_CLR(my_connections[i].fd, &rfds);
-					if ((n = read(my_connections[i].fd, buffer1, 128)) != -1)
+					n = read(my_connections[i].fd, buffer1, 128);
+					if (n > 0)
 					{
-						char *pos = strchr(buffer1, '\n');
-						*(pos + 1) = '\0';
-						/*PROCESS INCOMING MESSAGES*/
 						Process_Incoming_Messages(my_connections[i], self, nb, buffer1);
+						// TODO: atualizar o array de nós de acordo com o comando
 					}
-					else
+					else if (n == 0)
+					{
+						/* REAJUSTAR A REDE */
+						printf("este malandro saiu: %i \n", my_connections[i].fd);
+						if (i != num_connections - 1)
+							memcpy(&(my_connections[i]), &(my_connections[--num_connections]), sizeof(struct Node));
+						else
+							num_connections--;
+						max_fd = 0;
+						for (int i = 0; i < num_connections; i++)
+						{
+							if (my_connections[i].fd > max_fd)
+								max_fd = my_connections[i].fd;
+						}
+					}
+					else if (n == -1)
 					{
 						printf("error: %s\n", strerror(errno));
 						exit(1);
@@ -549,20 +592,4 @@ int main(int argc, char *argv[])
 		}
 	}
 	return 0;
-
-	// //-------------------------meu codigo----------------------------
-	// char myip[128],
-	// 	myport[128], nodeip[128], nodeport[128];
-	// Process_Console_Arguments(argc, argv, myip, myport, nodeip, nodeport);
-	// struct User_Commands comms = (struct User_Commands){2, 37, 1, 1, "172.25.240.51", "58001", "qq", 2};
-	// struct Node self;
-	// struct Node other;
-	// struct Neighborhood nb;
-	// struct Exp_Table expt;
-	// self.net = 37;
-	// self.id = 1;
-	// strcpy(self.port, myport);
-	// strcpy(self.ip, myip);
-	// djoin(&comms, self, &other, &nb, &expt, nodeip, nodeport);
-	// //-------------------------meu codigo----------------------------
 }

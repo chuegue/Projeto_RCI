@@ -1,7 +1,7 @@
 PROJECT_NAME = cot #target file name
 
 CC = gcc #compiler
-CFLAGS = -g#-Wall -O3
+CFLAGS = -g#-Wall -O3 -pedantic
 
 OBJECTS = Main.o #Utilities.o Variantes.o Stack.o Dijkstra.o MinHeap.o List.o Queue.o
 
