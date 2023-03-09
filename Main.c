@@ -423,6 +423,43 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 	}
 }
 
+void Process_Incoming_Messages(struct Node node_conections, struct Node self, struct Neighborhood nb, char incoming_message[128])
+{
+    char outgoing_message[128] = {0};
+    printf("EU <--- FD nº%i: %s\n", node_conections.fd, incoming_message);
+    char *token = strtok(incoming_message, " ");
+    if (strcmp(token, "NEW") == 0)
+    {
+        token = strtok(NULL, " ");
+        for (int k = 0; k < 2; k++)
+        {
+            if (token == NULL) // certifica que tem o numero de argumentos necessários
+            {
+                missing_arguments();
+                exit(1);
+            }
+            switch (k)
+            {
+            case 0:
+                strcpy(node_conections.ip, token);
+                // printf("IP DO MENINO QUE SE JUNTOU: %s\n", my_connections[i].ip);
+                break;
+            case 1:
+                strcpy(node_conections.port, token);
+                // printf("PORT DO MENINO QUE SE JUNTOU: %s\n", my_connections[i].port);
+                break;
+            }
+        }
+        sprintf(outgoing_message, "EXTERN %02i %s %s", nb.external, self.ip, self.port);
+        if (write(node_conections.fd, outgoing_message, strlen(outgoing_message)) == -1)
+        {
+            printf("error: %s\n", strerror(errno));
+            exit(1);
+        }
+        printf("EU ---> FD nº%i: %s\n", node_conections.fd, outgoing_message);
+    }
+}
+
 int main(int argc, char *argv[])
 {
 	int max_fd, counter, comms_fd, n, nw;
@@ -500,38 +537,7 @@ int main(int argc, char *argv[])
 						char *pos = strchr(buffer1, '\n');
 						*(pos + 1) = '\0';
 						/*PROCESS INCOMING MESSAGES*/
-						printf("EU <--- FD nº%i: %s\n", my_connections[i].fd, buffer1);
-						char *token = strtok(buffer1, " ");
-						if (strcmp(token, "NEW") == 0)
-						{
-							token = strtok(NULL, " ");
-							for (int k = 0; k < 2; k++)
-							{
-								if (token == NULL) // certifica que tem o numero de argumentos necessários
-								{
-									missing_arguments();
-									exit(1);
-								}
-								switch (k)
-								{
-								case 0:
-									strcpy(my_connections[i].ip, token);
-									// printf("IP DO MENINO QUE SE JUNTOU: %s\n", my_connections[i].ip);
-									break;
-								case 1:
-									strcpy(my_connections[i].port, token);
-									// printf("PORT DO MENINO QUE SE JUNTOU: %s\n", my_connections[i].port);
-									break;
-								}
-							}
-							sprintf(message, "EXTERN %02i %s %s", nb.external, self.ip, self.port);
-							if (write(my_connections[i].fd, message, strlen(message)) == -1)
-							{
-								printf("error: %s\n", strerror(errno));
-								exit(1);
-							}
-							printf("EU ---> FD nº%i: %s\n", my_connections[i].fd, message);
-						}
+						Process_Incoming_Messages(my_connections[i], self, nb, buffer1);
 					}
 					else
 					{
