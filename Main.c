@@ -200,7 +200,7 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 			printf("error: %s\n", strerror(errno));
 			exit(1);
 		}
-		char buffer[128];
+		char buffer[128] = {0};
 		sprintf(buffer, "NEW %02i %.32s %.8s\n", self->id, self->ip, self->port);
 		if (write(fd, buffer, strlen(buffer)) == -1)
 		{
@@ -406,10 +406,10 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 	}
 }
 
-void Process_Incoming_Messages(struct Node node_conections, struct Node self, struct Neighborhood nb, char incoming_message[128])
+void Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neighborhood nb, char incoming_message[128])
 {
 	char outgoing_message[128] = {0};
-	printf("EU <--- FD nº%i: %s\n", node_conections.fd, incoming_message);
+	printf("EU <--- FD nº%i: %s\n", other->fd, incoming_message);
 	char *token = strtok(incoming_message, " ");
 	if (strcmp(token, "NEW") == 0)
 	{
@@ -424,22 +424,21 @@ void Process_Incoming_Messages(struct Node node_conections, struct Node self, st
 			switch (k)
 			{
 			case 0:
-				strcpy(node_conections.ip, token);
-				// printf("IP DO MENINO QUE SE JUNTOU: %s\n", my_connections[i].ip);
+				strcpy(other->ip, token);
 				break;
 			case 1:
-				strcpy(node_conections.port, token);
-				// printf("PORT DO MENINO QUE SE JUNTOU: %s\n", my_connections[i].port);
+				strcpy(other->port, token);
 				break;
 			}
+			token = strtok(NULL, " ");
 		}
-		sprintf(outgoing_message, "EXTERN %02i %.32s %.8s\n", nb.external, self.ip, self.port);
-		if (write(node_conections.fd, outgoing_message, strlen(outgoing_message)) == -1)
+		sprintf(outgoing_message, "EXTERN %02i %.32s %.8s\n", nb.external, self->ip, self->port);
+		if (write(other->fd, outgoing_message, strlen(outgoing_message)) == -1)
 		{
 			printf("error: %s\n", strerror(errno));
 			exit(1);
 		}
-		printf("EU ---> FD nº%i: %s\n", node_conections.fd, outgoing_message);
+		printf("EU ---> FD nº%i: %s\n", other->fd, outgoing_message);
 	}
 }
 
@@ -537,6 +536,7 @@ int main(int argc, char *argv[])
 					{
 						close(my_connections[i].fd);
 					}
+					num_connections = 0;
 					break;
 
 				default:
@@ -561,10 +561,11 @@ int main(int argc, char *argv[])
 				if (FD_ISSET(my_connections[i].fd, &rfds))
 				{
 					FD_CLR(my_connections[i].fd, &rfds);
+					memset(buffer1, 0, sizeof buffer1);
 					n = read(my_connections[i].fd, buffer1, 128);
 					if (n > 0)
 					{
-						Process_Incoming_Messages(my_connections[i], self, nb, buffer1);
+						Process_Incoming_Messages(&(my_connections[i]), &self, nb, buffer1);
 						// TODO: atualizar o array de nós de acordo com o comando
 					}
 					else if (n == 0)

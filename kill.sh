@@ -1,0 +1,2 @@
+echo kill $(sudo netstat -anp | awk '/ LISTEN / {if($4 ~ ":58001$") { gsub("/.*","",$7); print $7; exit } }')
+echo kill $(sudo netstat -anp | awk '/ LISTEN / {if($4 ~ ":58002$") { gsub("/.*","",$7); print $7; exit } }')
