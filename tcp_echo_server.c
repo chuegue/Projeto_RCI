@@ -26,18 +26,18 @@ int main(void)
     char *ptr, buffer[128];
     ptr = (char *)calloc(128, sizeof(char));
     if ((fd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
-        exit(1);
+        while(1){};
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
     if ((errcode = getaddrinfo(NULL, "58001", &hints, &res)) != 0)
-        exit(1);
+        while(1){};
     if (bind(fd, res->ai_addr, res->ai_addrlen) == -1)
-        exit(1);
+        while(1){};
     if (listen(fd, 5) == -1)
-        exit(1);
+        while(1){};
 
     state = idle;
 
@@ -60,7 +60,7 @@ int main(void)
         if (counter <= 0)
         {
             printf("erro: %s\n",strerror(counter));
-            exit(1);
+            while(1){};
         }
         for (; counter; --counter)
         {
@@ -74,7 +74,7 @@ int main(void)
                     if ((newfd = accept(fd, &addr, &addrlen)) == -1)
                     {
                         printf("puta2\n");
-                        exit(1);
+                        while(1){};
                     }
                     afd = newfd;
                     state = busy;
@@ -86,12 +86,12 @@ int main(void)
                     FD_CLR(fd, &rfds);
                     addrlen = sizeof(addr);
                     if ((newfd = accept(fd, &addr, &addrlen)) == -1)
-                        exit(1);
+                        while(1){};
                     /*write busy\n in newfd*/
                     strcpy(ptr, "busy\n");
                     n = write(newfd, ptr, strlen(ptr) * sizeof(char));
                     if (n <= 0)
-                        exit(1);
+                        while(1){};
                     close(newfd);
                 }
                 else if (FD_ISSET(afd, &rfds))
@@ -101,14 +101,14 @@ int main(void)
                     {
                         if (n == -1)
                         {
-                            exit(1);
+                            while(1){};
                         }
                         strcpy(ptr, buffer);
                         while (n > 0)
                         {
                             if ((nw = write(afd, buffer, n)) <= 0)
                             {
-                                exit(1);
+                                while(1){};
                             }
                             n -= nw;
                             ptr += nw;
