@@ -12,6 +12,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <errno.h>
+#include <time.h>
 
 #define max(A, B) ((A) >= (B) ? (A) : (B))
 
@@ -163,7 +164,7 @@ void Process_Console_Arguments(int argc, char *argv[], char myip[128], char mypo
 // 		printf("EU <--- SERVIDOR DE NOS: %s\n", received);
 // 		free(received);
 
-void djoin(struct User_Commands *commands, struct Node *self, struct Node *other, struct Neighborhood *nb, struct Expedition_Table *expt, char *nodesip, char *nodesport)
+void djoin(struct User_Commands *commands, struct Node *self, struct Node *other, struct Neighborhood *nb, struct Expedition_Table *expt)
 {
 	int fd;
 	struct addrinfo hints, *res;
@@ -221,6 +222,56 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 	}
 }
 
+void join(struct User_Commands *commands, struct Node *self, struct Node *other, struct Neighborhood *nb, struct Expedition_Table *expt, char *nodesip, char *nodesport)
+{
+	char server_response[100][128], buffer[128] = {0}, *received, *tok;
+	int n_received, i = 0, chosen;
+	sprintf(buffer, "NODES %03i", commands->net);
+	received = transrecieveUDP(nodesip, nodesport, buffer, strlen(buffer), &n_received);
+	memset(buffer, 0, sizeof buffer);
+	sprintf(buffer, "NODESLIST %03i", commands->net);
+	tok = strtok(received, "\n");
+	if (strcmp(tok, buffer) != 0)
+	{
+		printf("Erro no join\n");
+		exit(1);
+	}
+	if ((tok = strtok(NULL, "\n")) == NULL) // primeiro nó
+	{
+		printf("SOU O PRIMEIRO NÓ DA REDE\n");
+		commands->bootid = commands->id;
+		strcpy(commands->bootip, self->ip);
+		strcpy(commands->bootport, self->port);
+		djoin(commands, self, other, nb, expt);
+	}
+	else // segundo nó
+	{
+		while (tok)
+		{
+			strcpy(server_response[i++], tok);
+			tok = strtok(NULL, "\n");
+		}
+		srand(time(NULL));
+		chosen = rand() % i;
+		sscanf(server_response[chosen], "%i %s %s\n", &(commands->bootid), commands->bootip, commands->bootport);
+		djoin(commands, self, other, nb, expt);
+		printf("NÃO SOU O PRIMEIRO NÓ DA REDE E VOU ME LIGAR AO ID Nº %i\n", commands->bootid);
+	}
+	free(received);
+	memset(buffer, 0, sizeof buffer);
+	sprintf(buffer, "REG %03i %02i %.32s %.8s", commands->net, commands->id, self->ip, self->port);
+	printf("EU ---> SERVIDOR DE NOS: %s\n", buffer);
+	received = transrecieveUDP(nodesip, nodesport, buffer, strlen(buffer), &n_received);
+	if (strcmp(received, "OKREG") != 0)
+	{
+		free(received);
+		printf("ERRO: REG NÃO RESPONDEU OKREG\nRESPONDEU %s\n", received);
+		exit(1);
+	}
+	printf("EU <--- SERVIDOR DE NOS: %s\n", received);
+	free(received);
+}
+
 void leave(struct Node *self, struct Neighborhood *nb, struct Expedition_Table *expt, char *nodesip, char *nodesport)
 {
 	char message[128];
@@ -276,6 +327,7 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 			}
 			token = strtok(NULL, " ");
 		}
+		join(commands, self, other, nb, expt, nodesip, nodesport);
 		return;
 	}
 
@@ -316,7 +368,7 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 
 			token = strtok(NULL, " ");
 		}
-		djoin(commands, self, other, nb, expt, nodesip, nodesport);
+		djoin(commands, self, other, nb, expt);
 		return;
 	}
 
