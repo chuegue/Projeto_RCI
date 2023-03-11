@@ -1,30 +1,32 @@
 import multiprocessing
 from subprocess import Popen, PIPE, STDOUT
 import os
+import select
 
 
 def start_process(num):
-    # ./cot 127.0.0.1 5800%d 193.136.138.142 59000
     print('Starting', num)
-    # os.system("./cot 127.0.0.1 5800%1d 193.136.138.142 59000"%num)
-    p = Popen(["./cot"],args=["127.0.0.1", "5800%1d"%num, "193.136.138.142", "59000"], shell=False, stdin=PIPE, stdout=PIPE, stderr=STDOUT)
-    for _ in p.stdout:
-        pass
+    args = ["./cot", "127.0.0.1", "5800%d" % num, "193.136.138.142", "59000"]
+    p = Popen(args, stdin=PIPE, stdout=PIPE, stderr=open("err.txt", "w"))
     return p
 
 
-# djoin 037 %2d %2d(id onde ligar) 127.0.0.1 5800%1d(onde ligar)
-
-
 def connect(fromm, fromid, too, toid):
-    fromm.communicate(
-        input=b"djoin 037 %2d %2d 127.0.0.1 5800%1d" % (fromid, toid, toid))[0]
-    print(fromid + ":\n")
-    for line in fromm.stdout:
-        print(line)
-    print(toid + ":")
-    for line in too.stdout:
-        print(line)
+    output = "\n" + "-" * 20
+    try:
+        fromm.stdin.flush()
+        fr = fromm.communicate(
+            b"djoin 037 %02d %02d 127.0.0.1 5800%01d\n" % (fromid, toid, toid))[0].decode("utf-8")
+        output += "\nFrom %d:\n " % fromid+fr
+
+        tr = too.communicate()[0].decode("utf-8")
+        output += "\nTo: %d:\n " % toid + tr
+    except Exception as e:
+        output += str(e)
+    output += "-" * 20+"\n"
+    print(output)
+    with open("log.txt", "a") as f:
+        f.write(output)
 
 
 def main():

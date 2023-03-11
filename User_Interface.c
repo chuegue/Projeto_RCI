@@ -51,7 +51,7 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 	{
 		other->id = -1;
 		other->fd = -1;
-		nb->backup = self->id;
+		nb->backup.id = self->id;
 		nb->external = self->id;
 		nb->n_internal = 0;
 		memset((void *)nb->internal, 0xFF, 100 * sizeof(int));
@@ -86,7 +86,7 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 			printf("error: %s\n", strerror(errno));
 			exit(1);
 		}
-		printf("EU ---> FD nº%i: %s\n", fd, buffer);
+		printf("EU ---> ID nº%i: %s\n", commands->bootid, buffer);
 		nb->external = commands->bootid;
 		nb->n_internal = 0;
 		memset((void *)nb->internal, 0xFF, 100 * sizeof(int));

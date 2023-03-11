@@ -25,7 +25,7 @@ struct Node
 struct Neighborhood
 {
 	int external;
-	int backup;
+	struct Node backup;
 	int internal[100];
 	int n_internal;
 };

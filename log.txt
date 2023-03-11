@@ -1,0 +1,49 @@
+
+--------------------
+From 2:
+ error: Success
+
+To: 2:
+ error: Success
+--------------------
+
+--------------------
+From 1:
+ error: Connection refused
+
+To: 2:
+ error: Success
+--------------------
+
+--------------------
+From 2:
+ EU ---> FD nº1: NEW 02 127.0.0.1 58002
+
+error: Success
+
+To: 1:
+ 
+CONNECTION IN FILE DESCRIPTOR Nº4
+EU <--- ID nº0: NEW 02 127.0.0.1 58002
+
+EU ---> ID nº2: EXTERN 00 127.0.0.1 58001
+
+este malandro saiu: 4 
+error: Success
+--------------------
+
+--------------------
+From 1:
+ EU ---> ID nº2: NEW 01 127.0.0.1 58001
+
+error: Success
+
+To: 2:
+ 
+CONNECTION IN FILE DESCRIPTOR Nº4
+EU <--- ID nº0: NEW 01 127.0.0.1 58001
+
+EU ---> ID nº1: EXTERN 00 127.0.0.1 58002
+
+error: Connection reset by peer
+--------------------

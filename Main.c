@@ -79,7 +79,7 @@ void Process_Console_Arguments(int argc, char *argv[], char myip[128], char mypo
 	strcpy(nodeport, argv[4]);
 }
 
-void Connect_To_Backup(struct Node *self, struct Node backup)
+void Connect_To_Backup(struct Node *self, struct Node *backup)
 {
 	int fd;
 	struct addrinfo hints, *res;
@@ -93,7 +93,7 @@ void Connect_To_Backup(struct Node *self, struct Node backup)
 	memset(&hints, 0, sizeof hints);
 	hints.ai_family = AF_INET;
 	hints.ai_socktype = SOCK_STREAM;
-	if (getaddrinfo(backup.ip, backup.port, &hints, &res) != 0)
+	if (getaddrinfo(backup->ip, backup->port, &hints, &res) != 0)
 	{
 		printf("error: %s\n", strerror(errno));
 		exit(1);
@@ -110,12 +110,14 @@ void Connect_To_Backup(struct Node *self, struct Node backup)
 		printf("error: %s\n", strerror(errno));
 		exit(1);
 	}
-	printf("EU ---> FD nº%i: %s\n", fd, buffer);
+	printf("EU ---> ID nº%i: %s\n", backup->id, buffer);
 }
 
 void Leaving_Neighbour(struct Node *self, struct Node *leaver, struct Neighborhood *nb, struct Expedition_Table *expt, struct Node connections[100], int num_connections)
 {
-	// terminacao de sessao com vizinho nao externo
+	int chosen;
+
+	// ending session with non external neighbour
 	int leaver_id = leaver->id;
 	for (int i = 0; i < nb->n_internal; i++)
 	{
@@ -123,20 +125,21 @@ void Leaving_Neighbour(struct Node *self, struct Node *leaver, struct Neighborho
 		{
 			nb->internal[i] = -1;
 			nb->n_internal--;
+			return;
 		}
 	}
 
-	if (nb->backup != self->id)
+	if (nb->backup.id != self->id) // ending session with external neighbour (non anchor)
 	{
 		int i;
 		for (i = 0; i < num_connections; i++)
 		{
-			if (connections[i].id == nb->backup)
+			if (connections[i].id == nb->backup.id)
 				break;
 		}
 
-		Connect_To_Backup(self, connections[i]);
-		nb->external = nb->backup;
+		Connect_To_Backup(self, &(nb->backup));
+		nb->external = nb->backup.id;
 
 		for (int i = 0; i < num_connections; i++)
 		{
@@ -151,10 +154,40 @@ void Leaving_Neighbour(struct Node *self, struct Node *leaver, struct Neighborho
 						printf("error: %s\n", strerror(errno));
 						exit(1);
 					}
-					printf("EU ---> FD nº%i: %s\n", connections[i].fd, outgoing_message);
+					printf("EU ---> ID nº%i: %s\n", connections[i].id, outgoing_message);
 				}
 			}
 		}
+	}
+	else if (nb->n_internal != 0) // ending session with external neighbour (ânchor)
+	{
+		// choose last id of the internal neighbours
+		chosen = nb->internal[(nb->n_internal) - 1];
+		nb->external = chosen;
+
+		for (int i = 0; i < num_connections; i++) // send EXTERN to every internal
+		{
+			char outgoing_message[128] = {0};
+			sprintf(outgoing_message, "EXTERN %02i %.32s %.8s\n", nb->external, self->ip, self->port);
+			for (int j = 0; j < nb->n_internal; j++)
+			{
+				if (connections[i].id == nb->internal[j])
+				{
+					if (write(connections[i].fd, outgoing_message, strlen(outgoing_message)) == -1)
+					{
+						printf("error: %s\n", strerror(errno));
+						exit(1);
+					}
+					printf("EU ---> ID nº%i: %s\n", connections[i].id, outgoing_message);
+				}
+			}
+		}
+		nb->n_internal--;
+		nb->internal[nb->n_internal] = -1;
+	}
+	else
+	{
+		nb->external = self->id;
 	}
 }
 
@@ -197,7 +230,7 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 	}
 
 	// djoin net id bootid bootIP bootTCP
-	if (strcmp(token, "djoin") == 0)
+	else if (strcmp(token, "djoin") == 0)
 	{
 		token = strtok(NULL, " ");
 		commands->command = 2; /*?*/
@@ -239,7 +272,7 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 	}
 
 	// create name
-	if (strcmp(token, "create") == 0)
+	else if (strcmp(token, "create") == 0)
 	{
 		token = strtok(NULL, " ");
 		if (token == NULL)
@@ -254,7 +287,7 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 	}
 
 	// delete name
-	if (strcmp(token, "delete") == 0)
+	else if (strcmp(token, "delete") == 0)
 	{
 		token = strtok(NULL, " ");
 		if (token == NULL)
@@ -269,7 +302,7 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 	}
 
 	// get dest name
-	if (strcmp(token, "get") == 0)
+	else if (strcmp(token, "get") == 0)
 	{
 		token = strtok(NULL, " ");
 		for (int k = 0; k < 2; k++)
@@ -285,7 +318,7 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 	}
 
 	// show topology || show names || show routing
-	if (strcmp(token, "show") == 0)
+	else if (strcmp(token, "show") == 0)
 	{
 		token = strtok(NULL, " ");
 		if (token == NULL)
@@ -311,23 +344,28 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 		}
 	}
 
-	if (strstr(message, "leave") != NULL)
+	else if (strstr(message, "leave") != NULL)
 	{
 		commands->command = 9;
 		leave(self, nb, expt, nodesip, nodesport);
 		return;
 	}
 
-	if (strstr(message, "exit") != NULL)
+	else if (strstr(message, "exit") != NULL)
 	{
 		exit(0);
+	}
+	else if (strstr(message, "connections") != NULL)
+	{
+		commands->command = 69;
 	}
 }
 
 int Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neighborhood *nb, struct Expedition_Table *expt, char incoming_message[128])
 {
 	char outgoing_message[128] = {0};
-	printf("EU <--- FD nº%i: %s\n", other->fd, incoming_message);
+	char holder[128] = {0};
+	strcpy(holder, incoming_message);
 	char *token = strtok(incoming_message, " ");
 	if (strcmp(token, "NEW") == 0)
 	{
@@ -355,20 +393,24 @@ int Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neig
 			}
 			token = strtok(NULL, " ");
 		}
+		printf("EU <--- ID nº%i: %s\n", other->id, holder);
 		sprintf(outgoing_message, "EXTERN %02i %.32s %.8s\n", nb->external, self->ip, self->port);
 		if (write(other->fd, outgoing_message, strlen(outgoing_message)) == -1)
 		{
 			printf("error: %s\n", strerror(errno));
 			exit(1);
 		}
-		printf("EU ---> FD nº%i: %s\n", other->fd, outgoing_message);
+		printf("EU ---> ID nº%i: %s\n", other->id, outgoing_message);
 		expt->forward[other->id] = other->id;
-		if (nb->external == self->id)
+		if (nb->external == self->id) // tou sozinho, quero ancora
 		{
 			nb->external = other->id;
-			nb->backup = self->id;
+			nb->backup.id = self->id;
+			strcpy(nb->backup.ip, self->ip);
+			strcpy(nb->backup.port, self->port);
+			nb->backup.fd = self->fd;
 		}
-		else
+		else // só mais um interno
 		{
 			nb->internal[(nb->n_internal)++] = other->id;
 		}
@@ -377,6 +419,7 @@ int Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neig
 	else if (strcmp(token, "EXTERN") == 0)
 	{
 		token = strtok(NULL, " ");
+		int e;
 		for (int k = 0; k < 3; k++)
 		{
 			if (token == NULL) // certifica que tem o numero de argumentos necessários
@@ -387,19 +430,21 @@ int Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neig
 			switch (k)
 			{
 			case 0:
-				nb->backup = atoi(token);
+				e = atoi(token);
+				nb->backup.id = (e == nb->external) ? self->id : e;
 				break;
 			case 1:
-				strcpy(other->ip, token);
+				strcpy(nb->backup.ip, token);
 				break;
 			case 2:
 				if (token[strlen(token) - 1] == '\n')
 					token[strlen(token) - 1] = '\0';
-				strcpy(other->port, token);
+				strcpy(nb->backup.port, token);
 				break;
 			}
 			token = strtok(NULL, " ");
 		}
+		printf("EU <--- ID nº%i: %s\n", other->id, holder);
 		return 'e';
 	}
 	else if (strcmp(token, "WITHDRAW"))
@@ -512,7 +557,18 @@ int main(int argc, char *argv[])
 					}
 					num_connections = 0;
 					break;
-
+				case 69:
+					for (int i = 0; i < num_connections; i++)
+					{
+						printf("ID: %02i\nNET: %02i\nIP: %.32s\nPORT: %.8s\nFD: %i\n\n", my_connections[i].id, my_connections[i].net, my_connections[i].ip, my_connections[i].port, my_connections[i].fd);
+					}
+					printf("NEIGHBOURHOOD:\nEXTERN: %i\nBACKUP: %i\nINTERNALS: %i ---> ", nb.external, nb.backup.id, nb.n_internal);
+					for (int i = 0; i < nb.n_internal; i++)
+					{
+						printf("%i ", nb.internal[i]);
+					}
+					printf("\n\n");
+					break;
 				default:
 					break;
 				}
@@ -540,8 +596,11 @@ int main(int argc, char *argv[])
 					if (n > 0)
 					{
 						n = Process_Incoming_Messages(&(my_connections[i]), &self, &nb, &expt, buffer1);
+						int j, l;
 						switch (n)
 						{
+						case 'n':
+							break;
 						case 'w':
 							/*implement broacasting of messages*/
 							break;
