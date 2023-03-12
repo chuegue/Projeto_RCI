@@ -147,7 +147,7 @@ void Leaving_Neighbour(struct Node *self, struct Node *leaver, struct Neighborho
 		strcpy(nb->external.port, nb->backup.port);
 		nb->external.fd = nb->backup.fd;
 
-	 	memcpy(leaver, &(nb->external), sizeof(struct Node));
+		memcpy(leaver, &(nb->external), sizeof(struct Node));
 
 		for (int i = 0; i < *num_connections; i++)
 		{
@@ -483,6 +483,24 @@ int Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neig
 		// do stuff
 		return 'w';
 	}
+	return 0;
+}
+
+void Show_Topology(struct Neighborhood *nb, struct Node connections[100], int num_connections)
+{
+	printf("VIZINHOS INTERNOS \n");
+	for (int i = 0; i < num_connections; i++)
+	{
+		if ((connections[i].id != nb->external.id) && (connections[i].id != nb->backup.id))
+			printf("id: %i \t ip: %s \t port: %s \n", connections[i].id, connections[i].ip, connections[i].port);
+	}
+	printf("\n");
+
+	printf("VIZINHO EXTERNO \n");
+	printf("id: %i \t ip: %s \t port: %s \n \n", nb->external.id, nb->external.ip, nb->external.port);
+
+	printf("VIZINHO DE RECUPERAÇÃO \n");
+	printf("id: %i \t ip: %s \t port: %s \n \n", nb->backup.id, nb->backup.ip, nb->backup.port);
 }
 
 int main(int argc, char *argv[])

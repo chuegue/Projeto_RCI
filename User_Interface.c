@@ -108,7 +108,7 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 void join(struct User_Commands *commands, struct Node *self, struct Node *other, struct Neighborhood *nb, struct Expedition_Table *expt, char *nodesip, char *nodesport)
 {
 	char server_response[100][128], buffer[128] = {0}, *received, *tok;
-	int n_received, i = 0, chosen;
+	unsigned int n_received, i = 0, chosen;
 	sprintf(buffer, "NODES %03i", commands->net);
 	received = transrecieveUDP(nodesip, nodesport, buffer, strlen(buffer), &n_received);
 	memset(buffer, 0, sizeof buffer);
