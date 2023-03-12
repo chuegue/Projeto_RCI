@@ -49,10 +49,12 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 	self->id = commands->id;
 	if (commands->id == commands->bootid) /*Primeiro nó da rede*/
 	{
+		strcpy(self->ip, commands->bootip);
+		strcpy(self->port, commands->bootport);
 		other->id = -1;
 		other->fd = -1;
-		nb->backup.id = self->id;
-		nb->external = self->id;
+		memcpy(&(nb->backup), self, sizeof(struct Node));
+		memcpy(&(nb->external), self, sizeof(struct Node));
 		nb->n_internal = 0;
 		memset((void *)nb->internal, 0xFF, 100 * sizeof(int));
 		memset((void *)expt->forward, 0xFF, 100 * sizeof(int));
@@ -87,7 +89,10 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 			exit(1);
 		}
 		printf("EU ---> ID nº%i: %s\n", commands->bootid, buffer);
-		nb->external = commands->bootid;
+		nb->external.id = commands->bootid;
+		strcpy(nb->external.ip, commands->bootip);
+		strcpy(nb->external.port, commands->bootport);
+		nb->external.fd = fd;
 		nb->n_internal = 0;
 		memset((void *)nb->internal, 0xFF, 100 * sizeof(int));
 		memset((void *)expt->forward, 0xFF, 100 * sizeof(int));
@@ -167,6 +172,4 @@ void leave(struct Node *self, struct Neighborhood *nb, struct Expedition_Table *
 	}
 	printf("EU <--- SERVIDOR DE NOS: %s\n", received);
 	free(received);
-
-	// como raio deteto que foi terminada uma sessao?
 }
