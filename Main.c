@@ -661,6 +661,7 @@ int main(int argc, char *argv[])
 					}
 					else if (n == 0)
 					{
+						close(my_connections[i].fd);
 						printf("este malandro saiu: %i \n", my_connections[i].fd);
 						Leaving_Neighbour(&self, &(my_connections[i]), &nb, &expt, my_connections, &num_connections);
 						max_fd = 0;

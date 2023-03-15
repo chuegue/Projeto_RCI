@@ -1,4 +1,4 @@
-#include "User_interface.h"
+#include "User_Interface.h"
 
 /*Sends a message in string [m_tosend] containing [n_send] chars to the UDP
 server with IP [ip] and PORT [port]. Returns the response of the server in a string that needs
