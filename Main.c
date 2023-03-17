@@ -16,8 +16,13 @@
 
 #include "User_Interface.h"
 #include "Structs.h"
+#include "List.h"
 
 #define max(A, B) ((A) >= (B) ? (A) : (B))
+int eqstring(Item a, Item b)
+{
+	return strcmp((char *)a, (char *)b);
+}
 
 /*Returns a string containing the IP of this local machine (XXX.XXX.XXX.XXX)
 which needs to be freed after use*/
@@ -217,6 +222,45 @@ void missing_arguments()
 	printf(" Faltam argumentos! \n");
 }
 
+void Send_Query(int dest, int orig, char name, struct Node *self, struct Neighborhood *nb, struct Expedition_Table *expt)
+{
+	char buffer[128] = {0};
+	sprintf(buffer, "QUERY %02i %02i %.8s\n", dest, self->id, name);
+	if (expt->forward[dest] != -1) // if my destination id on my expedition table send directly there
+	{
+		if (write(expt->forward[dest], buffer, strlen(buffer)) == -1)
+		{
+			printf("error: %s\n", strerror(errno));
+			exit(1);
+		}
+		printf("EU ---> ID nº%i: %s\n", expt->forward[dest], buffer);
+	}
+	else // if not, send QUERY to every neighbour
+	{
+		for (int i = 0; i < nb->n_internal; i++) // send to every internal neighbour
+		{
+			if (write(nb->internal.fd, buffer, strlen(buffer)) == -1)
+			{
+				printf("error: %s\n", strerror(errno));
+				exit(1);
+			}
+			printf("EU ---> ID nº%i: %s\n", nb->internal.fd, buffer);
+		}
+		if (write(nb->external.fd, buffer, strlen(buffer)) == -1) // send to external neighbour
+		{
+			printf("error: %s\n", strerror(errno));
+			exit(1);
+		}
+		printf("EU ---> ID nº%i: %s\n", nb->external.fd, buffer);
+		if (write(nb->backup.fd, buffer, strlen(buffer)) == -1) // send to backup neighbour
+		{
+			printf("error: %s\n", strerror(errno));
+			exit(1);
+		}
+		printf("EU ---> ID nº%i: %s\n", nb->backup.fd, buffer);
+	}
+}
+
 void Process_User_Commands(char message[128], struct User_Commands *commands, struct Node *self, struct Node *other, struct Neighborhood *nb, struct Expedition_Table *expt, char *nodesip, char *nodesport)
 {
 	char *token = strtok(message, " ");
@@ -295,31 +339,29 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 	// create name
 	else if (strcmp(token, "create") == 0)
 	{
+		commands->command = 3;
 		token = strtok(NULL, " ");
 		if (token == NULL)
 		{
 			missing_arguments();
 			exit(1);
 		}
-		else if (strcmp(token, "name") == 0)
-		{
-			printf("You are in create name! \n");
-		}
+		strcpy(commands->name, token);
+		return;
 	}
 
 	// delete name
 	else if (strcmp(token, "delete") == 0)
 	{
+		commands->command = 4;
 		token = strtok(NULL, " ");
 		if (token == NULL)
 		{
 			missing_arguments();
 			exit(1);
 		}
-		else if (strcmp(token, "name") == 0)
-		{
-			printf("You are in delete name! \n");
-		}
+		strcpy(commands->name, token);
+		return;
 	}
 
 	// get dest name
@@ -333,9 +375,20 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 				missing_arguments();
 				exit(1);
 			}
-			printf("Ciclo join: %s\n", token);
+			switch (k)
+			{
+			case 0:
+				commands->id = atoi(token);
+				break;
+			case 1:
+				strcpy(commands->name, token);
+				break;
+			default:
+				break;
+			}
 			token = strtok(NULL, " ");
 		}
+		Send_Query(commands->id, self->id, commands->name, self, nb, expt);
 	}
 
 	// show topology || show names || show routing
@@ -478,6 +531,41 @@ int Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neig
 		printf("EU <--- ID nº%i: %s\n", other->id, holder);
 		return 'e';
 	}
+	else if (strcmp(token, "QUERY") == 0)
+	{
+		int dest, orig;
+		char name;
+		token = strtok(NULL, " ");
+		for (int k = 0; k < 3; k++)
+		{
+			if (token == NULL) // certifica que tem o numero de argumentos necessários
+			{
+				missing_arguments();
+				exit(1);
+			}
+			switch (k)
+			{
+			case 0:
+				dest = atoi(token);
+				break;
+			case 1:
+				orig = atoi(token);
+				break;
+			case 2:
+				strcpy(name, token);
+				break;
+			}
+			token = strtok(NULL, " ");
+		}
+		if (dest == self->id) // if i am the node they searching for
+		{
+			// procurar na linked list de conteudos
+		}
+		else
+		{
+			Send_Query(dest, orig, name, self, nb, expt);
+		}
+	}
 	else if (strcmp(token, "WITHDRAW"))
 	{
 		// do stuff
@@ -516,6 +604,7 @@ int main(int argc, char *argv[])
 	fd_set rfds;
 	struct sockaddr addr;
 	socklen_t addrlen;
+	List *list = Init_List();
 
 	// Process console arguments
 	Process_Console_Arguments(argc, argv, myip, myport, nodeip, nodeport);
@@ -599,6 +688,13 @@ int main(int argc, char *argv[])
 						max_fd = max(max_fd, other.fd);
 						memcpy(&(my_connections[num_connections++]), &other, sizeof(struct Node));
 					}
+					break;
+				case 3: // create
+					list = Add_Beginning_List(list, (Item)0);
+					list = Change_At_Begining_List(list, (Item)(&(usercomms.name)));
+					break;
+				case 4: // delete
+					list = Delete_At_Index_Lista(list, Search_Item_List(list, (Item) & (usercomms.name), eqstring));
 					break;
 				case 9: // leave
 					for (int i = 0; i < num_connections; i++)
