@@ -222,20 +222,36 @@ void missing_arguments()
 	printf(" Faltam argumentos! \n");
 }
 
-void Send_Query(int dest, int orig, char name, struct Node *self, struct Neighborhood *nb, struct Expedition_Table *expt)
+int Gimme_Fd(int wanted_id, struct Neighborhood *nb)
+{
+	if (nb->backup.id == wanted_id)
+		return nb->backup.fd;
+	else if (nb->external.id == wanted_id)
+		return nb->external.fd;
+
+	for (int i = 0; i < nb->n_internal; i++)
+	{
+		if (nb->internal[i].id == wanted_id)
+			return nb->external.fd;
+	}
+}
+
+void Send_Query(int dest, int orig, char name[128], struct Node *other, struct Neighborhood *nb, struct Expedition_Table *expt)
 {
 	char buffer[128] = {0};
-	sprintf(buffer, "QUERY %02i %02i %.8s\n", dest, self->id, name);
-	if (expt->forward[dest] != -1) // if my destination id on my expedition table send directly there
+	int dest_fd;
+	sprintf(buffer, "QUERY %02i %02i %.8s\n", dest, orig, name);
+	if (expt->forward[dest] != -1) // if my destination id is on my expedition table send to that neighbour
 	{
-		if (write(expt->forward[dest], buffer, strlen(buffer)) == -1)
+		dest_fd = Gimme_Fd(dest, nb);
+		if (write(dest_fd, buffer, strlen(buffer)) == -1) // FD ERRADO
 		{
 			printf("error: %s\n", strerror(errno));
 			exit(1);
 		}
 		printf("EU ---> ID nº%i: %s\n", expt->forward[dest], buffer);
 	}
-	else // if not, send QUERY to every neighbour
+	else // if not, send QUERY to every neighbour and update expedition table
 	{
 		for (int i = 0; i < nb->n_internal; i++) // send to every internal neighbour
 		{
@@ -258,6 +274,9 @@ void Send_Query(int dest, int orig, char name, struct Node *self, struct Neighbo
 			exit(1);
 		}
 		printf("EU ---> ID nº%i: %s\n", nb->backup.fd, buffer);
+
+		// now I know that to send message to orig, I can send it first to where I received QUERY from
+		expt->forward[orig] = other->id; // DUVIDA: mudo sempre o vizinho ?
 	}
 }
 
@@ -534,7 +553,7 @@ int Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neig
 	else if (strcmp(token, "QUERY") == 0)
 	{
 		int dest, orig;
-		char name;
+		char name[128];
 		token = strtok(NULL, " ");
 		for (int k = 0; k < 3; k++)
 		{
@@ -563,7 +582,7 @@ int Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neig
 		}
 		else
 		{
-			Send_Query(dest, orig, name, self, nb, expt);
+			Send_Query(dest, orig, name, other, nb, expt);
 		}
 	}
 	else if (strcmp(token, "WITHDRAW"))
