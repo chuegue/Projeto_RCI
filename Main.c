@@ -19,10 +19,6 @@
 #include "List.h"
 
 #define max(A, B) ((A) >= (B) ? (A) : (B))
-int eqstring(Item a, Item b)
-{
-	return strcmp((char *)a, (char *)b);
-}
 
 /*Returns a string containing the IP of this local machine (XXX.XXX.XXX.XXX)
 which needs to be freed after use*/
@@ -127,10 +123,9 @@ void Leaving_Neighbour(struct Node *self, struct Node *leaver, struct Neighborho
 	int leaver_id = leaver->id;
 	for (int i = 0; i < nb->n_internal; i++)
 	{
-		if (nb->internal[i] == leaver_id)
+		if (nb->internal[i].id == leaver_id)
 		{
-			nb->internal[i] = -1;
-			nb->n_internal--;
+			memcpy(&(nb->internal[i]), &nb->internal[--(nb->n_internal)], sizeof(struct Node));
 			memcpy(leaver, &(connections[*num_connections - 1]), sizeof(struct Node));
 			(*num_connections)--;
 			return;
@@ -160,7 +155,7 @@ void Leaving_Neighbour(struct Node *self, struct Node *leaver, struct Neighborho
 			sprintf(outgoing_message, "EXTERN %02i %.32s %.8s\n", nb->external.id, nb->external.ip, nb->external.port);
 			for (int j = 0; j < nb->n_internal; j++)
 			{
-				if (connections[i].id == nb->internal[j])
+				if (connections[i].id == nb->internal[j].id)
 				{
 					if (write(connections[i].fd, outgoing_message, strlen(outgoing_message)) == -1)
 					{
@@ -175,17 +170,7 @@ void Leaving_Neighbour(struct Node *self, struct Node *leaver, struct Neighborho
 	else if (nb->n_internal != 0) // ending session with external neighbour (ânchor)
 	{
 		// choose last id of the internal neighbours
-		nb->external.id = nb->internal[(nb->n_internal) - 1];
-
-		for (int e = 0; e < *num_connections; e++)
-		{
-			if (connections[e].id == nb->internal[(nb->n_internal) - 1])
-			{
-				strcpy(nb->external.ip, connections[e].ip);
-				strcpy(nb->external.port, connections[e].port);
-				nb->external.fd = connections[e].fd;
-			}
-		}
+		memcpy(&(nb->external), &(nb->internal[(nb->n_internal) - 1]), sizeof(struct Node));
 
 		memcpy(leaver, &(connections[*num_connections - 1]), sizeof(struct Node));
 		(*num_connections)--;
@@ -196,7 +181,7 @@ void Leaving_Neighbour(struct Node *self, struct Node *leaver, struct Neighborho
 			sprintf(outgoing_message, "EXTERN %02i %.32s %.8s\n", nb->external.id, nb->external.ip, nb->external.port);
 			for (int j = 0; j < nb->n_internal; j++)
 			{
-				if (connections[i].id == nb->internal[j])
+				if (connections[i].id == nb->internal[j].id)
 				{
 					if (write(connections[i].fd, outgoing_message, strlen(outgoing_message)) == -1)
 					{
@@ -207,8 +192,7 @@ void Leaving_Neighbour(struct Node *self, struct Node *leaver, struct Neighborho
 				}
 			}
 		}
-		nb->n_internal--;
-		nb->internal[nb->n_internal] = -1;
+		memset(&(nb->internal[--(nb->n_internal)]), -1, sizeof(struct Node));
 	}
 	else
 	{
@@ -240,7 +224,7 @@ void Send_Query(int dest, int orig, char name[128], struct Node *other, struct N
 {
 	char buffer[128] = {0};
 	int dest_fd;
-	sprintf(buffer, "QUERY %02i %02i %.8s\n", dest, orig, name);
+	sprintf(buffer, "QUERY %02i %02i %s\n", dest, orig, name);
 	if (expt->forward[dest] != -1) // if my destination id is on my expedition table send to that neighbour
 	{
 		dest_fd = Gimme_Fd(dest, nb);
@@ -255,12 +239,12 @@ void Send_Query(int dest, int orig, char name[128], struct Node *other, struct N
 	{
 		for (int i = 0; i < nb->n_internal; i++) // send to every internal neighbour
 		{
-			if (write(nb->internal.fd, buffer, strlen(buffer)) == -1)
+			if (write(nb->internal[i].fd, buffer, strlen(buffer)) == -1)
 			{
 				printf("error: %s\n", strerror(errno));
 				exit(1);
 			}
-			printf("EU ---> ID nº%i: %s\n", nb->internal.fd, buffer);
+			printf("EU ---> ID nº%i: %s\n", nb->internal[i].id, buffer);
 		}
 		if (write(nb->external.fd, buffer, strlen(buffer)) == -1) // send to external neighbour
 		{
@@ -276,8 +260,35 @@ void Send_Query(int dest, int orig, char name[128], struct Node *other, struct N
 		printf("EU ---> ID nº%i: %s\n", nb->backup.fd, buffer);
 
 		// now I know that to send message to orig, I can send it first to where I received QUERY from
-		expt->forward[orig] = other->id; // DUVIDA: mudo sempre o vizinho ?
+		expt->forward[orig] = other->id;
+
+		// 	o =======-\ __________________________ _ _   _     _
+		// 	o =======-/
 	}
+}
+
+char *Check_Content(char name[128], List *list)
+{
+	if (Search_Item_List(list, name) == -1)
+		return (char *)NULL;
+	else
+		return (char *)Get_At_Index_List(list, Search_Item_List(list, name));
+}
+
+void First_Send_Content(int dest, int orig, char name[128], List *list, struct Neighborhood *nb, struct Expedition_Table *expt)
+{
+	char buffer[128] = {0};
+	if (Check_Content(name, list) == NULL)
+		sprintf(buffer, "NOCONTENT %02i %02i %s\n", dest, orig, name);
+	else
+		sprintf(buffer, "CONTENT %02i %02i %s\n", dest, orig, name);
+	int neighbour_fd = Gimme_Fd(expt->forward[dest], nb);
+	if (write(neighbour_fd, buffer, strlen(buffer)) == -1)
+	{
+		printf("error: %s\n", strerror(errno));
+		exit(1);
+	}
+	printf("EU ---> ID nº%i: %s\n", expt->forward[dest], buffer);
 }
 
 void Process_User_Commands(char message[128], struct User_Commands *commands, struct Node *self, struct Node *other, struct Neighborhood *nb, struct Expedition_Table *expt, char *nodesip, char *nodesport)
@@ -365,6 +376,8 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 			missing_arguments();
 			exit(1);
 		}
+		if (token[strlen(token) - 1] == '\n')
+			token[strlen(token) - 1] = '\0';
 		strcpy(commands->name, token);
 		return;
 	}
@@ -379,6 +392,8 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 			missing_arguments();
 			exit(1);
 		}
+		if (token[strlen(token) - 1] == '\n')
+			token[strlen(token) - 1] = '\0';
 		strcpy(commands->name, token);
 		return;
 	}
@@ -400,6 +415,8 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 				commands->id = atoi(token);
 				break;
 			case 1:
+				if (token[strlen(token) - 1] == '\n')
+					token[strlen(token) - 1] = '\0';
 				strcpy(commands->name, token);
 				break;
 			default:
@@ -407,7 +424,7 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 			}
 			token = strtok(NULL, " ");
 		}
-		Send_Query(commands->id, self->id, commands->name, self, nb, expt);
+		Send_Query(commands->id, self->id, commands->name, other, nb, expt);
 	}
 
 	// show topology || show names || show routing
@@ -417,18 +434,19 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 		if (token == NULL)
 		{
 			missing_arguments();
-			exit(1);
 		}
-		else if (strcmp(token, "topology") == 0)
+		else if (strstr(token, "topology") != NULL)
 		{
+			commands->command = 6;
 			printf("You are in show topology! \n");
 		}
-		else if (strcmp(token, "names") == 0)
+		else if (strstr(token, "names") != NULL)
 		{
-			printf("You are in show names! \n");
+			commands->command = 7;
 		}
-		else if (strcmp(token, "routing") == 0)
+		else if (strstr(token, "routing") != NULL)
 		{
+			commands->command = 8;
 			printf("You are in show routing! \n");
 		}
 		else
@@ -446,7 +464,7 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 
 	else if (strstr(message, "exit") != NULL)
 	{
-		exit(0);
+		commands->command = 10;
 	}
 	else if (strstr(message, "connections") != NULL)
 	{
@@ -454,7 +472,7 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 	}
 }
 
-int Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neighborhood *nb, struct Expedition_Table *expt, char incoming_message[128])
+int Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neighborhood *nb, struct Expedition_Table *expt, char incoming_message[128], List *list)
 {
 	char outgoing_message[128] = {0};
 	char holder[128] = {0};
@@ -498,14 +516,11 @@ int Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neig
 		if (nb->external.id == self->id) // tou sozinho, quero ancora
 		{
 			memcpy(&(nb->external), other, sizeof(struct Node));
-			nb->backup.id = self->id;
-			strcpy(nb->backup.ip, self->ip);
-			strcpy(nb->backup.port, self->port);
-			nb->backup.fd = self->fd;
+			memcpy(&(nb->backup), self, sizeof(struct Node));
 		}
 		else // só mais um interno
 		{
-			nb->internal[(nb->n_internal)++] = other->id;
+			memcpy(&(nb->internal[(nb->n_internal)++]), other, sizeof(struct Node));
 		}
 		return 'n';
 	}
@@ -571,18 +586,90 @@ int Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neig
 				orig = atoi(token);
 				break;
 			case 2:
+				if (token[strlen(token) - 1] == '\n')
+					token[strlen(token) - 1] = '\0';
 				strcpy(name, token);
 				break;
 			}
 			token = strtok(NULL, " ");
 		}
+		printf("EU <--- ID nº%i: %s\n", other->id, holder);
 		if (dest == self->id) // if i am the node they searching for
 		{
-			// procurar na linked list de conteudos
+			First_Send_Content(orig, dest, name, list, nb, expt);
 		}
 		else
 		{
 			Send_Query(dest, orig, name, other, nb, expt);
+		}
+	}
+	else if (strcmp(token, "CONTENT") == 0)
+	{
+		int dest, orig;
+		char name[128];
+		token = strtok(NULL, " ");
+		for (int k = 0; k < 3; k++)
+		{
+			if (token == NULL) // certifica que tem o numero de argumentos necessários
+			{
+				missing_arguments();
+				exit(1);
+			}
+			if (k == 0)
+			{
+				dest = atoi(token);
+				break;
+			}
+			token = strtok(NULL, " ");
+		}
+		printf("EU <--- ID nº%i: %s\n", other->id, holder);
+		if (dest != self->id)
+		{
+			int neighbour_fd = Gimme_Fd(expt->forward[dest], nb);
+			if (write(neighbour_fd, holder, strlen(holder)) == -1)
+			{
+				printf("error: %s\n", strerror(errno));
+				exit(1);
+			}
+			printf("EU ---> ID nº%i: %s\n", expt->forward[dest], holder);
+		}
+		else
+		{
+			printf("sir i received the content as it was intended\n");
+		}
+	}
+	else if (strcmp(token, "NOCONTENT") == 0)
+	{
+		int dest, orig;
+		char name[128];
+		token = strtok(NULL, " ");
+		for (int k = 0; k < 3; k++)
+		{
+			if (token == NULL) // certifica que tem o numero de argumentos necessários
+			{
+				missing_arguments();
+				exit(1);
+			}
+			if (k == 0)
+			{
+				dest = atoi(token);
+				break;
+			}
+			token = strtok(NULL, " ");
+		}
+		if (dest != self->id)
+		{
+			int neighbour_fd = Gimme_Fd(expt->forward[dest], nb);
+			if (write(neighbour_fd, holder, strlen(holder)) == -1)
+			{
+				printf("error: %s\n", strerror(errno));
+				exit(1);
+			}
+			printf("EU ---> ID nº%i: %s\n", expt->forward[dest], holder);
+		}
+		else
+		{
+			printf("sir i received the nocontent as it was intended\n");
 		}
 	}
 	else if (strcmp(token, "WITHDRAW"))
@@ -709,11 +796,19 @@ int main(int argc, char *argv[])
 					}
 					break;
 				case 3: // create
-					list = Add_Beginning_List(list, (Item)0);
-					list = Change_At_Begining_List(list, (Item)(&(usercomms.name)));
+					list = Add_Beginning_List(list, usercomms.name);
 					break;
 				case 4: // delete
-					list = Delete_At_Index_Lista(list, Search_Item_List(list, (Item) & (usercomms.name), eqstring));
+					list = Delete_At_Index_Lista(list, Search_Item_List(list, usercomms.name));
+					break;
+				case 6: // show topology
+					Show_Topology(&nb, my_connections, num_connections);
+					break;
+				case 7: // show names
+					printf("------ NAMES ------  \n");
+					Print_List(list);
+					break;
+				case 8: // show routing
 					break;
 				case 9: // leave
 					for (int i = 0; i < num_connections; i++)
@@ -721,6 +816,10 @@ int main(int argc, char *argv[])
 						close(my_connections[i].fd);
 					}
 					num_connections = 0;
+					break;
+				case 10:
+					Free_List(list);
+					exit(0);
 					break;
 				case 69:
 					for (int i = 0; i < num_connections; i++)
@@ -730,7 +829,7 @@ int main(int argc, char *argv[])
 					printf("NEIGHBOURHOOD:\nEXTERN: %i\nBACKUP: %i\nINTERNALS: %i ---> ", nb.external.id, nb.backup.id, nb.n_internal);
 					for (int i = 0; i < nb.n_internal; i++)
 					{
-						printf("%i ", nb.internal[i]);
+						printf("%i ", nb.internal[i].id);
 					}
 					printf("\n\n");
 					break;
@@ -760,7 +859,7 @@ int main(int argc, char *argv[])
 					n = read(my_connections[i].fd, buffer1, 128);
 					if (n > 0)
 					{
-						n = Process_Incoming_Messages(&(my_connections[i]), &self, &nb, &expt, buffer1);
+						n = Process_Incoming_Messages(&(my_connections[i]), &self, &nb, &expt, buffer1, list);
 						int j, l;
 						switch (n)
 						{
@@ -797,3 +896,180 @@ int main(int argc, char *argv[])
 	}
 	return 0;
 }
+
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣠⣤⣤⣤⣄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣴⣿⣿⣿⣿⣿⣿⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⢿⣿⣿⣿⣿⣿⣿⣿⡿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠻⠿⠿⠿⠟⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣴⣶⣿⣿⣶⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢰⣿⣿⣿⣿⣿⣿⣿⣷⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⣸⣿⣿⣿⣿⣿⣿⣿⣿⡟⣿⣿⣿⣿⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣤⣶⣾⣿⣶⣶⣤⡀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⢠⣿⣿⣿⣿⣿⣿⣿⣿⡿⠀⠘⢿⣿⣿⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣴⣿⣿⣿⣿⣿⣿⣿⣿⣿⡄⠀
+// ⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⣿⣿⣿⣿⠇⠀⠀⠈⠻⣿⣿⣿⣿⣆⠀⠀⠀⠀⠀⠀⠀⠀⢰⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀
+// ⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⣿⣿⣿⡟⠀⣀⣤⣶⣶⣌⠻⣿⣿⣿⣷⡀⠀⠀⠀⠀⠀⠀⣸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡟⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠹⣿⣿⣿⣿⣿⣿⣿⠁⣰⣿⣿⣿⣿⣿⣦⡙⢿⣿⣿⣿⠄⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠟⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⢿⣿⣿⣿⣿⣿⣿⠀⣿⣿⣿⣿⣿⣿⣿⣿⣦⣙⣛⣋⣼⣿⣿⣶⣿⣿⣿⣿⣿⣿⣯⡉⠉⠉⠁⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣿⣿⣿⠀⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠈⣿⣿⣿⣿⣿⣿⡆⠀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⣿⡇⠀⢻⣿⣿⣿⣿⣿⡇⠀⠀⠈⠉⠉⢻⣿⣿⣿⣿⣿⣿⣿⣿⣿⠁⠀⠀⠀⠀⠀⠀⠀
+// ⠀⣠⣴⣶⣶⣶⣶⣶⣶⣾⣿⣿⣿⣿⣿⡇⠀⠸⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠹⢿⣿⣿⢿⣿⣿⣿⡿⠀⠀⠀⠀⠀⠀⠀⠀
+// ⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢰⣶⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣧⣄⣀⣀⣀⣀⣀⣀⡀
+// ⠸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢸⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+// ⠀⠀⠉⠉⠙⠛⠛⠛⠛⠛⠛⠛⠛⠛⠛⠁⠛⠛⠛⠛⠛⠛⠛⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠁
+
+// ────────────▄▀░░░░░▒▒▒█─
+// ───────────█░░░░░░▒▒▒█▒█
+// ──────────█░░░░░░▒▒▒█▒░█
+// ────────▄▀░░░░░░▒▒▒▄▓░░█
+// ───────█░░░░░░▒▒▒▒▄▓▒░▒▓
+// ──────█▄▀▀▀▄▄▒▒▒▒▓▀▒░░▒▓
+// ────▄▀░░░░░░▒▀▄▒▓▀▒░░░▒▓
+// ───█░░░░░░░░░▒▒▓▀▒░░░░▒▓
+// ───█░░░█░░░░▒▒▓█▒▒░░░▒▒▓
+// ────█░░▀█░░▒▒▒█▒█░░░░▒▓▀
+// ─────▀▄▄▀▀▀▄▄▀░█░░░░▒▒▓─
+// ───────────█▒░░█░░░▒▒▓▀─
+// ────────────█▒░░█▒▒▒▒▓──
+// ─────────────▀▄▄▄▀▄▄▀─
+
+// ⠀⠀⠀⣴⣾⣿⣿⣶⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⢸⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠈⢿⣿⣿⣿⣿⠏⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠈⣉⣩⣀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⣼⣿⣿⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⢀⣼⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⢀⣾⣿⣿⣿⣿⣿⣿⣷⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⢠⣾⣿⣿⠉⣿⣿⣿⣿⣿⡄⠀⢀⣠⣤⣤⣀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠙⣿⣿⣧⣿⣿⣿⣿⣿⡇⢠⣿⣿⣿⣿⣿⣧⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠈⠻⣿⣿⣿⣿⣿⣿⣷⠸⣿⣿⣿⣿⣿⡿⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠘⠿⢿⣿⣿⣿⣿⡄⠙⠻⠿⠿⠛⠁⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⡟⣩⣝⢿⠀⠀⣠⣶⣶⣦⡀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⣷⡝⣿⣦⣠⣾⣿⣿⣿⣿⣷⡀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⣿⣿⣮⢻⣿⠟⣿⣿⣿⣿⣿⣷⡀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⡇⠀⠀⠻⠿⠻⣿⣿⣿⣿⣦⡀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⢰⣿⣿⣿⠇⠀⠀⠀⠀⠀⠘⣿⣿⣿⣿⣿⡆⠀⠀
+// ⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⠀⠀⠀⠀⠀⠀⣠⣾⣿⣿⣿⣿⠇⠀⠀
+// ⠀⠀⠀⠀⠀⠀⢸⣿⣿⡿⠀⠀⠀⢀⣴⣿⣿⣿⣿⣟⣋⣁⣀⣀⠀
+// ⠀⠀⠀⠀⠀⠀⠹⣿⣿⠇⠀⠀⠀⠸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠇
+
+// ⠀⠀⠀⢀⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⢺⠀⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⣠⡗⠉⠀⠀⠀⠀⠀⠀⠀⣠⣠⣤⠀⠀⠀
+// ⠀⣞⠉⢁⡀⠹⣄⠀⠀⠀⠀⢠⣿⠀⢀⠃⠀⠀
+// ⠀⣻⡇⠸⡇⢸⣎⠳⠤⠤⢤⠴⠾⠏⢑⣒⣒⣒
+// ⠀⢹⢻⡄⢿⣌⠈⠉⠈⣽⠏⠀⠀⢺⢱⣤⣠⣢
+// ⢀⠞⠀⠙⠳⣝⢦⣴⣻⡅⢀⣀⠖⠋⠀⠀⠀⠀
+// ⢸⡀⠀⠀⢰⡟⠻⠦⣽⡷⠋⠁⠀⠀⠀⠀⠀⠀
+// ⠀⠙⣄⠀⠈⣷⡀⠀⢯⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠹⣆⠀⢸⣷⡄⠘⡄⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⣠⠟⢀⡾⠁⣻⠀⡇⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⢰⡇⢀⡾⠁⠀⠉⢸⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⢸⢁⣻⣓⣲⢦⣻⣮⣀⣀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⢯⣘⠣⢄⡀⠰⢧⣽⣻⣯⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠈⠉⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣀⣀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣶⣾⣿⣶⣦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣰⣿⣿⣿⣿⣿⣿⣿⣶⣶⣶⣶⣶⣶⣶⣿⣶⣦⡀⢀⣾⣿⣿⣿⣿⣿⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⡀⣰⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢸⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⣀⣤⡀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣾⡿⣱⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡏⢸⣿⣿⣿⣿⣿⣿⣿⠟⣀⣴⣾⣿⣿⣿⣦⣀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⡿⣱⣿⣿⣿⣿⣿⣿⠟⢛⣉⣉⣉⣉⣙⣛⣛⠛⣿⣿⣿⣿⢃⡈⣿⣿⣿⡟⡉⣉⣵⣾⣿⣿⣿⣿⣿⣿⣿⣿⣷⣄⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠿⣱⣿⣿⣿⣿⣿⡿⢡⣾⣿⣿⣿⣿⣿⣿⣿⣿⡇⣿⣿⣿⡟⣸⣷⠸⣿⣿⢱⣿⣿⣿⣿⣿⣿⣿⡿⠻⢿⣿⣿⣿⣿⣷⣄⠀
+// ⣀⣤⣤⣤⣤⣤⣤⣤⣤⣴⣿⣿⣿⣿⣿⡟⠁⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢰⣿⣿⣿⣧⣭⣛⣁⣙⣋⣘⠻⣿⣿⣿⣿⣿⠟⠀⠀⠀⠙⢿⣿⣿⣿⣿⣧
+// ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠏⠀⠀⠘⣿⣿⣿⣿⣿⣿⣿⣿⣿⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡷⣸⣿⠿⠋⠁⠀⠀⠀⠀⠀⠀⠙⠿⣿⣿⡿
+// ⠈⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠀⠀⠀⠀⠀⠀⠉⠉⠉⠉⠉⠉⠉⠉⠀⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+
+// ⠀⠀⠀⠀⡸⠀⠀⠀⠀⠀⢀⣀⣀⡀⠀⠀⠀⠀⠀⠀⠈⢣⠀⠀⠀⠀⠀⠀⢈⣧⠀⠀⡀⠀⠀⢀⠇⠀⠀⠀⠀⣀⠀⢀⣘⣷⢄⡀⡀⠀
+// ⠀⠀⠀⢠⠃⠀⣠⣴⠯⠋⠀⠀⠤⣌⡉⠓⢤⡀⠀⠀⠀⠸⡄⠀⠀⠀⠀⠀⣸⣿⣧⠤⠓⠐⢤⠾⠤⣤⠋⠒⢤⣿⠉⠁⠀⠀⠀⠹⣇⠀
+// ⠀⠀⠀⠸⣤⠞⢁⠔⠀⠀⠀⠀⠀⠈⠙⢦⡀⠙⢦⡀⠀⠀⠷⣤⡀⠀⠀⣰⠟⠉⠀⠀⠀⢶⡁⠀⠀⠈⠦⠀⠀⠙⠒⡶⠲⡀⠀⠀⢿⡄
+// ⠀⠀⢀⣼⠃⠀⣇⡤⠊⠀⠀⠀⠀⠀⡼⠀⠙⣢⣤⣝⣒⣉⠦⣬⣝⣦⠞⠁⠀⢀⣀⠤⠴⠈⢓⣤⡤⠀⠀⠀⠀⠀⠀⠸⣤⠑⠀⠀⡀⠃
+// ⠀⠀⡜⠁⠀⠀⠀⠀⠀⠀⠀⠀⣠⠞⢀⡤⠊⠉⡤⠊⠀⠀⠀⠀⠀⠉⠓⢶⡞⠉⠀⠀⠀⠀⠀⠀⢈⡓⠦⢄⡀⠀⠀⢰⡇⠑⠄⢸⣿⡀
+// ⠀⢠⠃⠀⠀⠀⠀⠀⠀⣀⣴⣾⠕⢺⠏⠀⢠⠞⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢙⢦⠀⠀⠀⠀⠀⣰⠋⠀⠀⠀⠈⠑⢤⡀⡇⠀⠀⠘⢹⠇
+// ⠀⢸⠰⢤⣀⣀⠤⢔⣾⠿⠃⡄⢀⡏⠀⠀⠎⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢳⡳⡀⠀⢀⠼⠇⠀⠀⠀⠀⠀⠀⠀⢹⠣⢴⡆⠀⠸⠀
+// ⠀⢸⠀⢀⣠⠔⠊⠡⠖⠀⠀⡿⣸⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠑⠱⡐⠋⠀⢆⠀⠀⠀⠀⠀⢀⠀⠈⣆⣀⠈⢓⣁⠀
+// ⠀⠼⠖⠉⠀⠀⠀⠀⢀⠤⢆⡇⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢣⠀⠀⠀⠓⠲⠀⣀⠞⢁⣠⡒⠉⡀⠀⢀⣈⡿
+// ⠀⠀⠀⠀⠀⢀⣠⠔⠃⣠⢾⠀⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⣆⡤⣴⠶⠒⠛⠛⠺⠯⣄⢠⣀⠈⠉⢿⡀⠀
+// ⠀⠀⣀⡤⠖⣉⡤⠖⠊⠹⢺⡷⣘⡆⠀⢠⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⠀⠀⡠⠴⠚⠀⣀⣀⣈⣷⣯⠑⢤⡀⢃⠀
+// ⠀⣀⣤⠖⠋⠁⠀⠀⠀⠀⡜⠀⠈⢻⡀⠈⡆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣀⣀⣠⠖⠋⠉⠁⠀⠀⠀⠀⠀⠀⠉⠋⠀
+// ⠚⣿⣿⣿⡄⠀⠀⠀⢀⡞⠀⠀⠀⠈⢧⠀⢹⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⢍⡁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⢠⣿⣿⣿⣿⣤⠤⠖⠋⠀⠀⡠⠄⠀⠈⣆⠀⢣⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡏⠀⠙⠂⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⣼⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀(   ㅅ   )
+
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⠟⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⣰⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣿⣿⣿⠟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⡟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣾⣿⡿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡧⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢰⣿⠇⠀⢀⢀⠀⠀⡄⠀⠀⠀⠀⠀⠀⠀⠇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⡿⠀⢠⠃⢸⠀⢠⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⠃⠀⡘⡶⣼⢰⠈⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⡿⠀⠀⣿⡇⡧⠘⡆⢻⡆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⡇⠀⢸⣾⣷⣧⣀⠀⠈⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢼⡇⠀⠈⣿⡼⢿⣯⡛⠦⢬⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⡇⠀⢠⡟⢃⣼⠟⢿⣄⠀⠀⠓⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⢷⢠⠏⢀⣾⣯⠤⠤⢿⣷⡀⠀⠀⠐⢄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⣿⠠⣿⣿⣿⡗⠒⠒⠬⣿⣆⠀⢀⠈⢷⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣸⣿⣾⡏⠀⠀⠐⠤⡀⠙⢿⣦⣀⠀⠹⣦⡀⠀⢄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢿⣼⡧⣿⠀⠀⠘⠀⠀⡆⠑⣄⠈⠙⠻⣶⣍⣿⡆⢆⠠⠁⠄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⡇⢿⠀⠀⠸⡄⠀⡆⠀⡎⠀⢸⠀⠀⠙⣻⣿⡇⢀⠃⠄⢂⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⢎⡷⠀⠀⠀⠃⠀⡇⠀⠃⠀⠸⡀⠳⠀⠈⢿⣧⠂⠌⡐⡀⠂⠄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠄⠂⠰⣿⢺⣗⠀⠀⠀⠇⠀⠁⠀⠀⠀⠀⠁⠩⠀⠀⢹⣿⠀⡘⠠⢀⠁⠂⠄⡐⠀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠂⠁⠠⢁⠸⣿⣹⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢚⣿⡐⠠⡁⠂⠌⡐⠠⡀⠡⠐⡈⠠⢀⠀⡀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠐⠠⠀⠂⠠⢈⠠⣿⣽⣯⠐⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣞⣿⢃⠄⣃⠰⢀⡁⢂⢁⠂⠄⣁⠂⠌⠠⢁⠐⡀⢂⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠀⠄⠠⠁⡀⠂⡀⣿⢾⣿⡰⠀⠄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣏⢿⠐⡄⢂⠆⡐⢂⠤⢈⠂⡄⠌⡠⢁⠢⠐⡐⢂⠄
+// ⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠂⠄⠐⠀⡐⠀⠄⠀⣹⣏⣿⡦⢁⠂⠀⠀⠀⠠⠀⠀⠀⠀⠀⠀⠐⣿⡏⣆⠣⠜⢢⡘⢄⠣⢄⢃⠒⡨⠐⡄⠣⢌⠱⡈⠆⢎
+// ⡙⠷⢶⣤⣀⠀⠀⠀⠀⠀⠀⠀⠀⠄⢀⠂⢈⠀⠄⡐⠀⠂⠘⣿⣼⡷⡁⠆⡀⠀⠀⢂⠡⠀⠀⠀⠀⠀⠀⣿⣿⢤⡙⠬⣡⢘⠢⣑⠪⣄⢋⠴⣉⠲⣑⢊⠖⣩⢚⣴
+// ⠈⠳⣌⠲⣙⢻⢳⢶⣦⣤⣄⣀⣀⡠⢀⠠⢀⠈⣀⠠⢠⣐⣀⣻⣞⣿⣑⠢⢐⡀⠡⡈⠔⡀⠀⠀⠀⠀⠀⠼⣿⣷⣿⣵⣄⣣⢳⢬⡱⣤⣋⣦⣥⣳⣬⣾⡾⢷⣛⢛
+// ⠀⠁⢌⠳⣌⢣⠞⣲⡘⢦⡹⣙⢏⡟⣻⢛⠿⣻⠿⣿⣿⣟⡿⣿⣟⣾⣧⢃⠆⣄⠣⠘⠤⣁⠂⠀⠀⠀⠀⠈⢽⣷⣿⣜⣻⢻⡟⣿⢻⡟⣿⢻⣽⡿⢏⡱⡜⣡⠎⡜
+// ⠀⠀⠈⠱⢌⠶⣙⢦⡙⢦⠳⣍⠞⡼⣡⢏⡞⣥⢛⡴⣩⠏⣿⣟⣻⣞⣷⡫⢜⡠⢣⢍⡒⣤⣞⡤⠖⠂⠀⠀⠢⢝⣻⣧⣏⢗⡺⢥⡛⣜⢧⣿⠟⣍⢎⡵⡘⢦⡙⡜
+// ⠀⠀⠀⠀⠈⢞⡱⢎⡝⣎⡳⢬⣛⡴⢣⠞⣜⢦⣋⠶⣥⣻⡟⡴⣹⣯⣿⣟⢦⡱⢃⡖⣼⡿⠋⠀⠀⠀⠀⠀⠐⢠⢩⢿⣮⢎⠵⣣⠹⣼⣿⣋⠞⣬⠲⡜⣙⢦⡙⡜
+// ⠀⠀⠀⠀⠀⠈⡜⣗⣚⠶⣩⠷⣸⡜⣫⡝⣎⠶⣍⡞⣶⡿⣱⢣⢇⣳⢻⣿⣶⢩⠳⣼⠟⢀⠠⠀⠄⡀⠂⠄⠉⡄⢊⠾⣿⣬⠳⣌⢷⣿⢣⢮⣙⢦⡛⡜⣥⠲⣍⡜
+// ⠀⠀⠀⠀⠀⠀⠘⢿⣮⣛⣥⢻⡱⣞⡱⡞⣭⢞⡵⣺⣿⣱⢣⠿⣚⠯⣩⣟⡿⢷⣟⣥⣲⠄⠂⠌⡐⠠⠁⠌⠰⡈⢥⢛⣿⣧⡛⣼⣿⢫⢧⣓⢮⢲⡹⡜⢦⡛⡴⣊
+// ⠀⠀⠀⠀⠀⠀⠀⠣⣻⣷⢎⡷⣹⢎⡷⣹⠞⣎⢷⣿⢳⡎⢧⣋⠔⣣⡑⢎⣟⣯⣭⡷⠠⢌⡑⢢⢁⠱⠈⢆⠑⡘⢦⢩⠾⣷⣹⣾⣏⠿⣜⡎⣧⢳⡱⡹⢦⣙⠶⣱
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠑⢿⣯⡞⣵⢫⡞⣵⣫⠽⣾⣟⣧⢻⡱⢎⠼⢤⡙⡬⣩⡑⢦⡐⢣⠒⡌⢆⠪⠔⣉⠆⢎⡱⣊⠵⣫⣿⣽⣟⢮⡻⣼⡱⢧⡳⣍⠷⣓⣎⣳⡱
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⣿⣿⣜⣳⡽⣣⣏⠿⣽⡿⣜⣧⣛⢬⡓⣎⠶⣱⠱⣎⢧⡚⣥⢫⠜⣌⢣⡙⣤⢋⢦⢣⡝⣺⢵⣻⣿⠾⣭⡳⢧⣛⢧⡻⢼⣙⢮⢖⣥⣛
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠹⣿⢣⡷⣝⣳⣞⣻⣽⡿⣝⣶⡹⢶⣙⢦⣛⡴⣛⡼⣲⡝⣦⢏⡾⣌⢧⣙⠦⣏⣎⠷⣜⣧⡟⣿⣟⣯⣳⢽⡻⣼⢣⡟⣧⣛⢮⣏⠶⣭
+// ⠀⠀⡀⢀⠀⠀⡀⠀⠀⠀⠱⡌⡿⣜⡯⢷⡞⣧⢿⣿⡿⣼⣛⣧⢟⡞⣶⡹⣎⢷⣳⡽⣎⣟⢶⡹⣮⢭⣛⡶⣹⡞⣽⢶⣻⣿⢯⡶⢯⡷⣻⡵⣯⠽⣶⡹⣞⡼⣻⢼
+// ⢀⠡⠀⠄⠠⢁⠀⢂⠁⡈⠰⡘⡵⢯⡽⣯⣻⡽⣞⡿⣿⣳⣟⣾⣫⡽⣶⡻⣝⣾⣣⢿⡽⣞⣯⢟⡾⣽⣣⣟⢷⣻⡽⡾⣽⡿⣯⡽⣯⢷⣏⡷⣏⡿⣖⢿⣱⢯⣳⢯
+// ⠄⡂⠍⡌⡐⢂⠡⢂⠔⡠⢡⢱⢫⣟⣽⣳⢯⡷⣯⢿⡽⣿⣞⡷⣯⣟⣷⣻⡽⣾⡽⣯⢿⡽⣞⣯⣟⣷⢻⣞⣯⢷⣻⣽⣿⣟⣷⣻⡽⣾⡽⣽⡽⢾⣹⢯⡾⣝⣮⣟
+// ⢌⡱⢊⡔⡑⣊⠱⢌⢢⡑⢦⡩⢷⣞⡷⣯⢿⡽⣯⢿⡽⣯⢿⣿⣷⣻⣞⣷⣻⢷⣻⡽⣯⢿⣽⡾⣽⣞⣿⣾⣽⣿⣿⣿⣿⣻⣞⣷⣻⢷⣻⢷⣻⢯⣟⣳⢯⣟⡶⣯
+// ⢎⡔⢣⡜⡱⢌⠳⡌⢦⡙⢦⡽⣛⡾⣽⢯⡿⣽⢯⡿⣽⢯⣟⣾⣽⣻⢿⡿⣿⢿⡿⣿⣿⣿⣿⣿⣿⣿⢿⣿⣻⢿⣽⣳⣿⣟⣾⣳⣯⢿⡽⣯⣟⡿⣾⣽⣻⢾⣽⣳
+// ⢮⡜⣣⠞⣥⢋⢧⣙⢦⣛⣧⢿⣽⣻⡽⣯⢿⡽⣯⢿⣽⣻⢾⣳⣯⣟⣯⢿⡽⣯⣟⣷⣻⢿⣿⣽⣷⣿⣟⣾⣽⣻⡾⣽⣻⢾⣯⣷⢿⣯⢿⡷⣯⣟⡷⣯⣟⡿⣾⡽
+
+// ⢴⣤⣶⣾⣟⣇⠀⠐⠒⠂⠿⠛⢻⠳⡖⠐⠆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡀⠀⠀⠀⠉⠳⠤⣀⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠈⠉⠉⠛⠓⠲⠦⣤⣄⣀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⠞⠁⠀⣠⠴⠂⠀⠀⠀⠉⠙⠲⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠉⠉⠓⠒⠶⣤⣄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡶⠁⠀⢠⠞⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡀⠀⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠓⠶⢤⣀⠀⠀⠀⠈⠓⢦⠀⠘⢻⠀⠀⢠⡇⠀⠆⠀⠤⣤⡀⠤⢤⠤⠖⠚⠉⠀⠀⠈⢳⡀⠀⠀⠀⣀⡤⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠙⠦⣄⣤⡤⣶⣷⣄⣸⣦⠀⢸⠀⣀⡤⣾⣿⣶⣾⣧⠄⠀⠀⢀⣀⡤⢾⡁⠀⠉⣻⠗⠋⠁⠀⠀⠀⠀⠀⠀
+// ⠶⣄⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⣇⣸⣏⠁⠈⠛⢻⣯⣿⣾⠟⢁⠀⣿⣿⡏⠟⠛⠋⠉⠁⠀⠀⢈⣻⡶⠚⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⣤⣄⣙⣻⣦⣄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⠔⠀⠀⠹⣟⣚⣻⢦⣄⠀⠀⠉⠛⠂⠀⠑⠙⠋⠀⠀⠀⠀⠐⠦⠖⣻⡷⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠿⠿⠻⠿⠿⠿⠿⠷⣦⣄⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣠⠴⠞⠁⠀⠀⠀⠀⣿⠿⠷⠶⢿⣰⠂⢀⡶⣄⠐⠂⠀⢻⣆⢀⣴⣒⣶⣶⠴⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠶⢶⣶⣤⣤⣴⣶⣶⠙⠉⠻⠿⢶⣶⡶⠖⠒⠒⠒⠚⠉⠁⠀⠀⠀⠀⠀⠀⣼⠃⠀⠀⠀⠀⠉⢡⡟⠀⣽⠖⠒⠀⠉⠉⠛⢦⡴⠛⠁⠀⠀⠸⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⣶⣦⣬⣭⣽⡛⠛⠻⣿⣯⣧⣴⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡼⠉⠀⠀⠀⠀⠀⠀⡞⢀⡞⠁⠀⠀⠀⢀⡤⠖⠉⠀⠀⠀⠀⠀⠀⠙⠳⢤⣄⡀⠀⠀⠀⠀⢀⣠⣤⣾
+// ⠛⠿⣿⣿⣿⣿⣿⣿⣿⡿⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢧⠀⣀⣤⢤⣖⣒⣲⣷⣿⣒⠲⢤⡴⠚⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⢩⡽⠛⣿⣿⣿⣿⣿⠙
+// ⡀⠀⠉⢿⣭⣿⣿⡿⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⠟⠋⠉⠉⠀⠀⠀⠀⠀⠀⣠⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⡟⠁⠀⠀⠀
+// ⣿⣶⣦⣤⣿⡿⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣿⣀⣀⠀⣀⣀⣀⠀⠀⣠⠞⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⡏⠉⠉⠉⠉
+// ⣿⣿⣿⣿⡟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡰⠚⠁⠀⣠⠞⠋⠁⠀⠈⢹⠞⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣷⡄⠀⠀⠀
+// ⣿⣿⣿⠏⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⡾⠁⠀⠀⡼⠁⠀⠀⠀⠀⣴⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣀⠀⠀
+// ⣿⣿⡟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⠃⠀⠀⣸⠁⠀⠀⠀⠀⣰⠣⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⣿⣿⣿⡿⠃
+// ⣿⡟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⠀⠀⢀⣯⠀⠀⠀⠀⣴⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⢿⡻⣷⣦
+// ⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⡄⠀⣾⡇⠀⠀⢀⡾⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⠜⢷⡙⣿
+// ⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢷⡀⣿⣯⣀⡴⠟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⡀⠈⢷⠈
+// ⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠟⠲⢾⠏⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⡇⠀⠀⠀
+// ⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣆⠀⡾⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⡄⠀⠀⠀
+// ⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡿⠁⠀⠀⠀
+// ⣿⣿⡆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⢿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⡿⠀⠀⠀⠀
+// ⣿⣿⣿⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⡏⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣸⡇⠀⠀⠀⠀
+// ⣿⣿⣿⣿⣦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢰⡟⠀⠀⠀⠀⠀
+// ⣿⣿⣿⠟⠙⢷⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⡿⠃⠀⠀⠀⠀⠀
+// ⠛⠉⠀⠀⣀⣤⡿⣦⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢻⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣾⠁⠀⠀⠀⠀⠀⠀
+// ⠀⣀⡴⠞⠉⠀⠀⠈⣙⡷⣦⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⢿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣴⣿⠁⠀⠀⠀⠀⠀⠀⠀
+// ⠈⠁⠀⠀⠀⠀⠀⠀⠀⠸⡄⣹⣿⣶⣤⣤⣄⣀⣀⣀⣀⣀⣀⣀⢈⢻⣦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡀⣺⣾⣿⡿⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⠀⠀⠀⠀⠀⢀⣠⡤⠶⠟⠛⠋⠁⠀⠀⠀⠈⣉⣽⠿⠛⠉⣩⣿⢿⣿⣿⣷⣤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣠⣤⣿⣿⣿⠏⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⠀⣀⠀⠤⠞⠛⠉⠀⠀⠀⠀⠀⠀⠀⠀⣀⣴⠟⠋⠀⣠⡴⠟⠋⠀⠀⠈⣋⣿⣿⣿⣦⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣠⣴⣾⣿⣿⣿⣿⠇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+// ⢛⡉⣀⡀⢀⡀⠀⠀⠀⠀⠀⠀⣠⡶⠞⠋⣀⣠⠶⠟⠋⠀⠀⠀⠀⢠⣶⣿⣿⣿⣿⣿⣿⣶⣶⣶⣤⣤⣤⣤⣤⣤⣴⣶⣶⣿⣿⣿⣿⣿⣿⣿⣿⡿⠒⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀

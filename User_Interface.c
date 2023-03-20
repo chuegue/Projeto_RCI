@@ -56,7 +56,7 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 		memcpy(&(nb->backup), self, sizeof(struct Node));
 		memcpy(&(nb->external), self, sizeof(struct Node));
 		nb->n_internal = 0;
-		memset((void *)nb->internal, 0xFF, 100 * sizeof(int));
+		memset((void *)nb->internal, 0xFF, 100 * sizeof(struct Node));
 		memset((void *)expt->forward, 0xFF, 100 * sizeof(int));
 		return;
 	}
@@ -94,7 +94,7 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 		strcpy(nb->external.port, commands->bootport);
 		nb->external.fd = fd;
 		nb->n_internal = 0;
-		memset((void *)nb->internal, 0xFF, 100 * sizeof(int));
+		memset((void *)nb->internal, 0xFF, 100 * sizeof(struct Node));
 		memset((void *)expt->forward, 0xFF, 100 * sizeof(int));
 		expt->forward[commands->bootid] = commands->bootid;
 		other->fd = fd;

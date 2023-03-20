@@ -53,14 +53,17 @@ char *transrecieveUDP(char *ip, char *port, char *m_tosend, unsigned int n_send,
 
 int main(int argc, char *argv[])
 {
-    char message[128] = {0},**save_ptr, *receive1, *receive2, *token;
-    int n_received;
+    char message[128] = {0}, supposed[128] = {0}, **save_ptr, *receive1, *receive2, *token;
+    int n_received, i = 37;
+
+    printf("REDE Nº: %03i\n", i);
     memset(message, 0, sizeof message);
-    sprintf(message, "NODES 037");
+    sprintf(message, "NODES %03i", i);
+    sprintf(supposed, "NODESLIST %03i", i);
     receive1 = transrecieveUDP("193.136.138.142", "59000", message, strlen(message), &n_received);
     printf("Recebi a mensagem \n%s\n\n", receive1);
     token = strtok_r(receive1, "\n", &receive1);
-    if (strcmp(token, "NODESLIST 037") != 0)
+    if (strcmp(token, supposed) != 0)
     {
         printf("DEU MERDA FAMILIA\n");
         exit(1);
@@ -70,7 +73,7 @@ int main(int argc, char *argv[])
     {
         token = strtok(token, " ");
         memset(message, 0, sizeof message);
-        sprintf(message, "UNREG 037 %02i", atoi(token));
+        sprintf(message, "UNREG %03i %02i", i, atoi(token));
         receive2 = transrecieveUDP("193.136.138.142", "59000", message, strlen(message), &n_received);
         if (strcmp(receive2, "OKUNREG") != 0)
         {
@@ -82,3 +85,42 @@ int main(int argc, char *argv[])
     }
     printf("\nDone!\n\n");
 }
+
+// int main(int argc, char *argv[])
+// {
+//     char message[128] = {0}, supposed[128] = {0}, **save_ptr, *receive1, *receive2, *token;
+//     int n_received;
+//     for (int i = 0; i < 1000; i++)
+//     {
+//         if (i == 23)
+//             continue;
+//         printf("REDE Nº: %03i", i);
+//         memset(message, 0, sizeof message);
+//         sprintf(message, "NODES %03i", i);
+//         sprintf(supposed, "NODESLIST %03i", i);
+//         receive1 = transrecieveUDP("193.136.138.142", "59000", message, strlen(message), &n_received);
+//         printf("Recebi a mensagem \n%s\n\n", receive1);
+//         token = strtok_r(receive1, "\n", &receive1);
+//         if (strcmp(token, supposed) != 0)
+//         {
+//             printf("DEU MERDA FAMILIA\n");
+//             exit(1);
+//         }
+//         token = strtok_r(receive1, "\n", &receive1);
+//         while (token)
+//         {
+//             token = strtok(token, " ");
+//             memset(message, 0, sizeof message);
+//             sprintf(message, "UNREG %03i %02i", i, atoi(token));
+//             receive2 = transrecieveUDP("193.136.138.142", "59000", message, strlen(message), &n_received);
+//             if (strcmp(receive2, "OKUNREG") != 0)
+//             {
+//                 printf("DEU MERDA FAMILIA\n");
+//                 exit(1);
+//             }
+//             printf("Tirei o nó %02i\n", atoi(token));
+//             token = strtok_r(receive1, "\n", &receive1);
+//         }
+//         printf("\nDone!\n\n");
+//     }
+// }
