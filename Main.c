@@ -216,7 +216,7 @@ int Gimme_Fd(int wanted_id, struct Neighborhood *nb)
 	for (int i = 0; i < nb->n_internal; i++)
 	{
 		if (nb->internal[i].id == wanted_id)
-			return nb->external.fd;
+			return nb->internal[i].fd;
 	}
 }
 
@@ -227,7 +227,7 @@ void Send_Query(int dest, int orig, char name[128], struct Node *other, struct N
 	sprintf(buffer, "QUERY %02i %02i %s\n", dest, orig, name);
 	if (expt->forward[dest] != -1) // if my destination id is on my expedition table send to that neighbour
 	{
-		dest_fd = Gimme_Fd(dest, nb);
+		dest_fd = Gimme_Fd(expt->forward[dest], nb);
 		if (write(dest_fd, buffer, strlen(buffer)) == -1) // FD ERRADO
 		{
 			printf("error: %s\n", strerror(errno));
@@ -251,13 +251,13 @@ void Send_Query(int dest, int orig, char name[128], struct Node *other, struct N
 			printf("error: %s\n", strerror(errno));
 			exit(1);
 		}
-		printf("EU ---> ID nº%i: %s\n", nb->external.fd, buffer);
-		if (write(nb->backup.fd, buffer, strlen(buffer)) == -1) // send to backup neighbour
-		{
-			printf("error: %s\n", strerror(errno));
-			exit(1);
-		}
-		printf("EU ---> ID nº%i: %s\n", nb->backup.fd, buffer);
+		printf("EU ---> ID nº%i: %s\n", nb->external.id, buffer);
+		// if (write(nb->backup.fd, buffer, strlen(buffer)) == -1) // send to backup neighbour
+		// {
+		// 	printf("error: %s\n", strerror(errno));
+		// 	exit(1);
+		// }
+		// printf("EU ---> ID nº%i: %s\n", nb->backup.fd, buffer);
 
 		// now I know that to send message to orig, I can send it first to where I received QUERY from
 		expt->forward[orig] = other->id;
@@ -267,18 +267,19 @@ void Send_Query(int dest, int orig, char name[128], struct Node *other, struct N
 	}
 }
 
-char *Check_Content(char name[128], List *list)
+int Check_Content(char name[128], List *list)
 {
-	if (Search_Item_List(list, name) == -1)
-		return (char *)NULL;
-	else
-		return (char *)Get_At_Index_List(list, Search_Item_List(list, name));
+	// if (Search_Item_List(list, name) == -1)
+	// 	return (char *)NULL;
+	// else
+	// 	return (char *)Get_At_Index_List(list, Search_Item_List(list, name));
+	return Search_Item_List(list, name) == -1 ? 0 : 1;
 }
 
 void First_Send_Content(int dest, int orig, char name[128], List *list, struct Neighborhood *nb, struct Expedition_Table *expt)
 {
 	char buffer[128] = {0};
-	if (Check_Content(name, list) == NULL)
+	if (Check_Content(name, list) == 0)
 		sprintf(buffer, "NOCONTENT %02i %02i %s\n", dest, orig, name);
 	else
 		sprintf(buffer, "CONTENT %02i %02i %s\n", dest, orig, name);
@@ -401,6 +402,7 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 	// get dest name
 	else if (strcmp(token, "get") == 0)
 	{
+		commands->command = 5;
 		token = strtok(NULL, " ");
 		for (int k = 0; k < 2; k++)
 		{
@@ -438,7 +440,6 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 		else if (strstr(token, "topology") != NULL)
 		{
 			commands->command = 6;
-			printf("You are in show topology! \n");
 		}
 		else if (strstr(token, "names") != NULL)
 		{
@@ -447,7 +448,6 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 		else if (strstr(token, "routing") != NULL)
 		{
 			commands->command = 8;
-			printf("You are in show routing! \n");
 		}
 		else
 		{
@@ -562,6 +562,7 @@ int Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neig
 			}
 			token = strtok(NULL, " ");
 		}
+		expt->forward[e] = other->id;
 		printf("EU <--- ID nº%i: %s\n", other->id, holder);
 		return 'e';
 	}
@@ -593,6 +594,7 @@ int Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neig
 			}
 			token = strtok(NULL, " ");
 		}
+		expt->forward[orig] = other->id;
 		printf("EU <--- ID nº%i: %s\n", other->id, holder);
 		if (dest == self->id) // if i am the node they searching for
 		{
@@ -618,10 +620,14 @@ int Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neig
 			if (k == 0)
 			{
 				dest = atoi(token);
-				break;
+			}
+			else if (k == 1)
+			{
+				orig = atoi(token);
 			}
 			token = strtok(NULL, " ");
 		}
+		expt->forward[orig] = other->id;
 		printf("EU <--- ID nº%i: %s\n", other->id, holder);
 		if (dest != self->id)
 		{
@@ -635,6 +641,7 @@ int Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neig
 		}
 		else
 		{
+			expt->forward[orig] = other->id;
 			printf("sir i received the content as it was intended\n");
 		}
 	}
@@ -653,12 +660,17 @@ int Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neig
 			if (k == 0)
 			{
 				dest = atoi(token);
-				break;
+			}
+			else if (k == 1)
+			{
+				orig = atoi(token);
 			}
 			token = strtok(NULL, " ");
 		}
+		printf("EU <--- ID nº%i: %s\n", other->id, holder);
 		if (dest != self->id)
 		{
+			expt->forward[orig] = other->id;
 			int neighbour_fd = Gimme_Fd(expt->forward[dest], nb);
 			if (write(neighbour_fd, holder, strlen(holder)) == -1)
 			{
@@ -809,6 +821,13 @@ int main(int argc, char *argv[])
 					Print_List(list);
 					break;
 				case 8: // show routing
+					printf("------ ROUTING ------  \n");
+					for (int i = 0; i < 100; i++)
+					{
+						if (expt.forward[i] == -1)
+							continue;
+						printf("%02i ---> %02i\n", i, expt.forward[i]);
+					}
 					break;
 				case 9: // leave
 					for (int i = 0; i < num_connections; i++)
@@ -876,7 +895,8 @@ int main(int argc, char *argv[])
 					else if (n == 0)
 					{
 						close(my_connections[i].fd);
-						printf("este malandro saiu: %i \n", my_connections[i].fd);
+						expt.forward[my_connections[i].id] = -1;
+						printf("este malandro saiu: %i \n", my_connections[i].id);
 						Leaving_Neighbour(&self, &(my_connections[i]), &nb, &expt, my_connections, &num_connections);
 						max_fd = 0;
 						for (int i = 0; i < num_connections; i++)

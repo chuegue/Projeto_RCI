@@ -1,5 +1,5 @@
 #include "User_Interface.h"
-
+#include "Structs.h"
 /*Sends a message in string [m_tosend] containing [n_send] chars to the UDP
 server with IP [ip] and PORT [port]. Returns the response of the server in a string that needs
 to be freed after use and puts the number of chars read in [n_read]
@@ -172,4 +172,6 @@ void leave(struct Node *self, struct Neighborhood *nb, struct Expedition_Table *
 	}
 	printf("EU <--- SERVIDOR DE NOS: %s\n", received);
 	free(received);
+	memset(nb, -1, sizeof(struct Neighborhood));
+	memset(expt, -1, sizeof(struct Expedition_Table));
 }
