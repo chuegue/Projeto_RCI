@@ -115,8 +115,52 @@ void Connect_To_Backup(struct Node *self, struct Node *backup)
 	printf("EU ---> ID nº%i: %s\n", backup->id, buffer);
 }
 
+void Withdraw(struct Node *other, struct Neighborhood *nb, struct Expedition_Table *expt)
+{
+	for (int i = 0; i < 100; i++)
+	{
+		if (expt->forward[i] == other->id)
+		{
+			expt->forward[i] = -1;
+		}
+	}
+	expt->forward[other->id] = -1;
+	char buffer[128] = {0};
+	sprintf(buffer, "WITHDRAW %02i\n", other->id);
+	for (int i = 0; i < nb->n_internal; i++) // send to every internal neighbour
+	{
+		if (nb->internal[i].id == other->id)
+			continue;
+		if (write(nb->internal[i].fd, buffer, strlen(buffer)) == -1)
+		{
+			printf("error: %s\n", strerror(errno));
+			exit(1);
+		}
+		printf("EU ---> ID nº%i: %s\n", nb->internal[i].id, buffer);
+	}
+	if (nb->external.id != other->id)
+	{
+		if (write(nb->external.fd, buffer, strlen(buffer)) == -1) // send to external neighbour
+		{
+			printf("error: %s\n", strerror(errno));
+			exit(1);
+		}
+		printf("EU ---> ID nº%i: %s\n", nb->external.id, buffer);
+	}
+	for (int i = 0; i < 100; i++)
+	{
+		if (expt->forward[i] == other->id)
+			expt->forward[i] = -1;
+	}
+	expt->forward[other->id] = -1;
+}
+
 void Leaving_Neighbour(struct Node *self, struct Node *leaver, struct Neighborhood *nb, struct Expedition_Table *expt, struct Node connections[100], int *num_connections)
 {
+	// Withdraw
+
+	Withdraw(leaver, nb, expt);
+
 	int chosen;
 
 	// ending session with non external neighbour
@@ -428,7 +472,18 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 		}
 		Send_Query(commands->id, self->id, commands->name, other, nb, expt);
 	}
-
+	else if (strstr(message, "st") != NULL)
+	{
+		commands->command = 6;
+	}
+	else if (strstr(message, "sn") != NULL)
+	{
+		commands->command = 7;
+	}
+	else if (strstr(message, "sr") != NULL)
+	{
+		commands->command = 8;
+	}
 	// show topology || show names || show routing
 	else if (strcmp(token, "show") == 0)
 	{
@@ -454,7 +509,6 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 			printf("Not valid! \n");
 		}
 	}
-
 	else if (strstr(message, "leave") != NULL)
 	{
 		commands->command = 9;
@@ -505,13 +559,6 @@ int Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neig
 			token = strtok(NULL, " ");
 		}
 		printf("EU <--- ID nº%i: %s\n", other->id, holder);
-		sprintf(outgoing_message, "EXTERN %02i %.32s %.8s\n", nb->external.id, nb->external.ip, nb->external.port);
-		if (write(other->fd, outgoing_message, strlen(outgoing_message)) == -1)
-		{
-			printf("error: %s\n", strerror(errno));
-			exit(1);
-		}
-		printf("EU ---> ID nº%i: %s\n", other->id, outgoing_message);
 		expt->forward[other->id] = other->id;
 		if (nb->external.id == self->id) // tou sozinho, quero ancora
 		{
@@ -522,6 +569,13 @@ int Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neig
 		{
 			memcpy(&(nb->internal[(nb->n_internal)++]), other, sizeof(struct Node));
 		}
+		sprintf(outgoing_message, "EXTERN %02i %.32s %.8s\n", nb->external.id, nb->external.ip, nb->external.port);
+		if (write(other->fd, outgoing_message, strlen(outgoing_message)) == -1)
+		{
+			printf("error: %s\n", strerror(errno));
+			exit(1);
+		}
+		printf("EU ---> ID nº%i: %s\n", other->id, outgoing_message);
 		return 'n';
 	}
 	else if (strcmp(token, "EXTERN") == 0)
@@ -539,25 +593,15 @@ int Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neig
 			{
 			case 0:
 				e = atoi(token);
-				if (e == nb->external.id)
-					nb->backup.id = self->id;
-				else
-					nb->backup.id = e;
+				nb->backup.id = e;
 				break;
 			case 1:
-				if (e == nb->external.id)
-					strcpy(nb->backup.ip, self->ip);
-				else
-					strcpy(nb->backup.ip, token);
+				strcpy(nb->backup.ip, token);
 				break;
 			case 2:
 				if (token[strlen(token) - 1] == '\n')
 					token[strlen(token) - 1] = '\0';
-
-				if (e == nb->external.id)
-					strcpy(nb->backup.port, self->port);
-				else
-					strcpy(nb->backup.port, token);
+				strcpy(nb->backup.port, token);
 				break;
 			}
 			token = strtok(NULL, " ");
@@ -686,7 +730,8 @@ int Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neig
 	}
 	else if (strcmp(token, "WITHDRAW"))
 	{
-		// do stuff
+		printf("EU <--- ID nº%i: %s\n", other->id, holder);
+		Withdraw(other, nb, expt);
 		return 'w';
 	}
 	return 0;
@@ -694,6 +739,8 @@ int Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neig
 
 void Show_Topology(struct Neighborhood *nb, struct Node connections[100], int num_connections)
 {
+
+	printf("------ TOPOLOGY ------  \n");
 	printf("VIZINHOS INTERNOS \n");
 	for (int i = 0; i < num_connections; i++)
 	{
