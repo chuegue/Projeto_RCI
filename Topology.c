@@ -64,7 +64,7 @@ void Leaving_Neighbour(struct Node *self, struct Node *leaver, struct Neighborho
 		}
 
 		Connect_To_Backup(self, &(nb->backup));
-        
+
 		nb->external.id = nb->backup.id;
 		strcpy(nb->external.ip, nb->backup.ip);
 		strcpy(nb->external.port, nb->backup.port);
@@ -99,23 +99,18 @@ void Leaving_Neighbour(struct Node *self, struct Node *leaver, struct Neighborho
 		memcpy(leaver, &(connections[*num_connections - 1]), sizeof(struct Node));
 		(*num_connections)--;
 
-		for (int i = 0; i < *num_connections; i++) // send EXTERN to every internal
+		char outgoing_message[128] = {0};
+		sprintf(outgoing_message, "EXTERN %02i %.32s %.8s\n", nb->external.id, nb->external.ip, nb->external.port);
+		for (int j = 0; j < nb->n_internal; j++)
 		{
-			char outgoing_message[128] = {0};
-			sprintf(outgoing_message, "EXTERN %02i %.32s %.8s\n", nb->external.id, nb->external.ip, nb->external.port);
-			for (int j = 0; j < nb->n_internal; j++)
+			if (write(nb->internal[j].fd, outgoing_message, strlen(outgoing_message)) == -1)
 			{
-				if (connections[i].id == nb->internal[j].id)
-				{
-					if (write(connections[i].fd, outgoing_message, strlen(outgoing_message)) == -1)
-					{
-						printf("error: %s\n", strerror(errno));
-						exit(1);
-					}
-					printf("EU ---> ID nº%i: %s\n", connections[i].id, outgoing_message);
-				}
+				printf("error: %s\n", strerror(errno));
+				exit(1);
 			}
+			printf("EU ---> ID nº%i: %s\n", connections[i].id, outgoing_message);
 		}
+
 		memset(&(nb->internal[--(nb->n_internal)]), -1, sizeof(struct Node));
 	}
 	else
