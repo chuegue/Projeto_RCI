@@ -1,5 +1,4 @@
 #include "User_Interface.h"
-#include "Structs.h"
 /*Sends a message in string [m_tosend] containing [n_send] chars to the UDP
 server with IP [ip] and PORT [port]. Returns the response of the server in a string that needs
 to be freed after use and puts the number of chars read in [n_read]
@@ -107,8 +106,10 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 
 void join(struct User_Commands *commands, struct Node *self, struct Node *other, struct Neighborhood *nb, struct Expedition_Table *expt, char *nodesip, char *nodesport)
 {
-	char server_response[100][128], buffer[128] = {0}, *received, *tok;
-	unsigned int n_received, i = 0, chosen;
+	char server_response[100][128], copy[128][100], buffer[128] = {0}, *received, *tok;
+	unsigned int n_received, i = 0, j = 0, chosen;
+	int ids[100], is_repeated, n, max_id = 0, t = 0;
+	memset(ids, -1, 100 * sizeof(int));
 	sprintf(buffer, "NODES %03i", commands->net);
 	received = transrecieveUDP(nodesip, nodesport, buffer, strlen(buffer), &n_received);
 	memset(buffer, 0, sizeof buffer);
@@ -131,14 +132,42 @@ void join(struct User_Commands *commands, struct Node *self, struct Node *other,
 	{
 		while (tok)
 		{
-			strcpy(server_response[i++], tok);
+			strcpy(server_response[i], tok);
+			strcpy(copy[i], tok);
+			i++;
 			tok = strtok(NULL, "\n");
 		}
 		srand(time(NULL));
+		// verificar se há ids repetidos
+		is_repeated = 0;
+		for (j = 0; j < i; j++)
+		{
+			n = atoi(strtok(server_response[j], " "));
+			if (n > max_id)
+				max_id = n;
+			ids[n] = 1;
+			if (commands->id == n)
+				is_repeated = 1;
+		}
+		if (is_repeated)
+		{
+			for (t = 0; t < max_id; t++)
+			{
+				if (ids[t] == -1)
+				{
+					commands->id = t;
+					break;
+				}
+			}
+			printf("ID INTRODUZIDO JÁ ESTAVA EM USO.\nA PARTIR DE AGORA, ESTE NÓ TEM ID %02i\n", t);
+		}
+
 		chosen = rand() % i;
-		sscanf(server_response[chosen], "%i %s %s\n", &(commands->bootid), commands->bootip, commands->bootport);
-		djoin(commands, self, other, nb, expt);
+		sscanf(copy[chosen], "%i %s %s\n", &(commands->bootid), commands->bootip, commands->bootport);
+		if (is_repeated)
+			commands->id = t;
 		printf("NÃO SOU O PRIMEIRO NÓ DA REDE E VOU ME LIGAR AO ID Nº %i\n", commands->bootid);
+		djoin(commands, self, other, nb, expt);
 	}
 	free(received);
 	memset(buffer, 0, sizeof buffer);
@@ -174,4 +203,209 @@ void leave(struct Node *self, struct Neighborhood *nb, struct Expedition_Table *
 	free(received);
 	memset(nb, -1, sizeof(struct Neighborhood));
 	memset(expt, -1, sizeof(struct Expedition_Table));
+}
+
+void Process_User_Commands(char message[128], struct User_Commands *commands, struct Node *self, struct Node *other, struct Neighborhood *nb, struct Expedition_Table *expt, char *nodesip, char *nodesport)
+{
+	char *token = strtok(message, " ");
+
+	// join net id
+	if (strcmp(token, "join") == 0)
+	{
+		commands->command = 1;
+		token = strtok(NULL, " ");
+		for (int k = 0; k < 2; k++)
+		{
+			if (token == NULL) // certifica que tem o numero de argumentos necessários
+			{
+				missing_arguments();
+				exit(1);
+			}
+			switch (k)
+			{
+			case 0:
+				commands->net = atoi(token);
+				break;
+			case 1:
+				commands->id = atoi(token);
+				break;
+			default:
+				break;
+			}
+			token = strtok(NULL, " ");
+		}
+		join(commands, self, other, nb, expt, nodesip, nodesport);
+		return;
+	}
+
+	// djoin net id bootid bootIP bootTCP
+	else if (strcmp(token, "djoin") == 0)
+	{
+		token = strtok(NULL, " ");
+		commands->command = 2; /*?*/
+		for (int k = 0; k < 5; k++)
+		{
+			if (token == NULL) // certifica que tem o numero de argumentos necessários
+			{
+				missing_arguments();
+				exit(1);
+			}
+			switch (k)
+			{
+			case 0:
+				commands->net = atoi(token);
+				break;
+			case 1:
+				commands->id = atoi(token);
+				break;
+			case 2:
+				commands->bootid = atoi(token);
+				break;
+			case 3:
+				strcpy(commands->bootip, token);
+				break;
+			case 4:
+				if (token[strlen(token) - 1] == '\n')
+					token[strlen(token) - 1] = '\0';
+				strcpy(commands->bootport, token);
+				break;
+
+			default:
+				break;
+			}
+
+			token = strtok(NULL, " ");
+		}
+		djoin(commands, self, other, nb, expt);
+		return;
+	}
+
+	// create name
+	else if (strcmp(token, "create") == 0)
+	{
+		commands->command = 3;
+		token = strtok(NULL, " ");
+		if (token == NULL)
+		{
+			missing_arguments();
+			exit(1);
+		}
+		if (token[strlen(token) - 1] == '\n')
+			token[strlen(token) - 1] = '\0';
+		strcpy(commands->name, token);
+		return;
+	}
+
+	// delete name
+	else if (strcmp(token, "delete") == 0)
+	{
+		commands->command = 4;
+		token = strtok(NULL, " ");
+		if (token == NULL)
+		{
+			missing_arguments();
+			exit(1);
+		}
+		if (token[strlen(token) - 1] == '\n')
+			token[strlen(token) - 1] = '\0';
+		strcpy(commands->name, token);
+		return;
+	}
+
+	// get dest name
+	else if (strcmp(token, "get") == 0)
+	{
+		commands->command = 5;
+		token = strtok(NULL, " ");
+		for (int k = 0; k < 2; k++)
+		{
+			if (token == NULL) // certifica que tem o numero de argumentos necessários
+			{
+				missing_arguments();
+				exit(1);
+			}
+			switch (k)
+			{
+			case 0:
+				commands->id = atoi(token);
+				break;
+			case 1:
+				if (token[strlen(token) - 1] == '\n')
+					token[strlen(token) - 1] = '\0';
+				strcpy(commands->name, token);
+				break;
+			default:
+				break;
+			}
+			token = strtok(NULL, " ");
+		}
+		other->id = -1;
+		Send_Query(commands->id, self->id, commands->name, other, nb, expt);
+	}
+	else if (strcmp(token, "clear") == 0)
+	{
+		token = strtok(NULL, " ");
+		if (strstr(token, "routing") != NULL)
+		{
+			commands->command = 11;
+			memset(expt->forward, -1, 100 * sizeof(int));
+		}
+	}
+	else if (strstr(message, "cr") != NULL)
+	{
+		commands->command = 11;
+		memset(expt->forward, -1, 100 * sizeof(int));
+	}
+	else if (strstr(message, "st") != NULL)
+	{
+		commands->command = 6;
+	}
+	else if (strstr(message, "sn") != NULL)
+	{
+		commands->command = 7;
+	}
+	else if (strstr(message, "sr") != NULL)
+	{
+		commands->command = 8;
+	}
+	// show topology || show names || show routing
+	else if (strcmp(token, "show") == 0)
+	{
+		token = strtok(NULL, " ");
+		if (token == NULL)
+		{
+			missing_arguments();
+		}
+		else if (strstr(token, "topology") != NULL)
+		{
+			commands->command = 6;
+		}
+		else if (strstr(token, "names") != NULL)
+		{
+			commands->command = 7;
+		}
+		else if (strstr(token, "routing") != NULL)
+		{
+			commands->command = 8;
+		}
+		else
+		{
+			printf("Not valid! \n");
+		}
+	}
+	else if (strstr(message, "leave") != NULL)
+	{
+		commands->command = 9;
+		leave(self, nb, expt, nodesip, nodesport);
+		return;
+	}
+
+	else if (strstr(message, "exit") != NULL)
+	{
+		commands->command = 10;
+	}
+	else if (strstr(message, "connections") != NULL)
+	{
+		commands->command = 69;
+	}
 }

@@ -1,9 +1,9 @@
 PROJECT_NAME = cot #target file name
 
 CC = gcc #compiler
-CFLAGS = -g#-Wall -O3 -pedantic
+CFLAGS = -Wall -O3 -pedantic
 
-OBJECTS = Main.o User_Interface.o List.o#Utilities.o Variantes.o Stack.o Dijkstra.o MinHeap.o List.o Queue.o
+OBJECTS = Main.o User_Interface.o List.o Topology.o Routing.o Content.o Aux.o
 
 # FILES = $(shell ls ../Testes/*.in1)
 

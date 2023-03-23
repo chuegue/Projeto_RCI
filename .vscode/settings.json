@@ -1,6 +1,8 @@
 {
     "files.associations": {
         "types.h": "c",
-        "netdb.h": "c"
+        "netdb.h": "c",
+        "time.h": "c",
+        "if.h": "c"
     }
 }

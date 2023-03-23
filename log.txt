@@ -1,0 +1,26 @@
+
+--------------------
+From 2:
+ EU ---> ID nº1: NEW 02 127.0.0.1 58002
+
+error: Success
+
+To: 1:
+ 
+CONNECTION IN FILE DESCRIPTOR Nº4
+EU <--- ID nº2: NEW 02 127.0.0.1 58002
+
+EU ---> ID nº2: EXTERN 02 127.0.0.1 58002
+
+error: Connection reset by peer
+--------------------
+
+--------------------flush of closed file--------------------
+
+--------------------
+From 4:
+ error: Address already in use
+
+To: 5:
+ error: Success
+--------------------
