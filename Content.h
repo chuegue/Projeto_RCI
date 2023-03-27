@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include "Structs.h"
 #include "List.h"
-#include "Aux.h"
+#include "_Aux.h"
 
 void Send_Query(int dest, int orig, char name[128], struct Node *other, struct Neighborhood *nb, struct Expedition_Table *expt);
 int Check_Content(char name[128], List *list);

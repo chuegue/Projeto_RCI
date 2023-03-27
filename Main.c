@@ -24,7 +24,7 @@ int main(int argc, char *argv[])
 {
 	// Declare variables
 	int max_fd, counter, listen_fd, comms_fd, n, num_connections = 0;
-	char buffer[128], myip[128], myport[128], nodeip[128], nodeport[128];
+	char buffer[128], myip[128], myport[128], nodeip[128], nodeport[128], incoming_message[1024];
 	struct User_Commands usercomms;
 	struct Node my_connections[100] = {0};
 	for (int i = 0; i < 100; i++)
@@ -208,11 +208,11 @@ int main(int argc, char *argv[])
 				if (FD_ISSET(my_connections[i].fd, &rfds))
 				{
 					FD_CLR(my_connections[i].fd, &rfds);
-					memset(buffer, 0, sizeof buffer);
-					n = read(my_connections[i].fd, buffer, 128);
+					memset(incoming_message, 0, sizeof incoming_message);
+					n = read(my_connections[i].fd, incoming_message, 128);
 					if (n > 0)
 					{
-						n = Process_Incoming_Messages(&(my_connections[i]), &self, &nb, &expt, buffer, list);
+						n = Process_Incoming_Messages(&(my_connections[i]), &self, &nb, &expt, incoming_message, list);
 					}
 					else if (n == 0)
 					{

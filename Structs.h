@@ -20,6 +20,7 @@ struct Node
 	char ip[128];
 	char port[128];
 	int fd;
+	char buffer[1024];
 };
 
 struct Neighborhood

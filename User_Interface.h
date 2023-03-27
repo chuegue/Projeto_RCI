@@ -18,7 +18,7 @@
 #include <time.h>
 #include <fcntl.h>
 #include "Structs.h"
-#include "Aux.h"
+#include "_Aux.h"
 #include "Content.h"
 
 void djoin(struct User_Commands *commands, struct Node *self, struct Node *other, struct Neighborhood *nb, struct Expedition_Table *expt);
