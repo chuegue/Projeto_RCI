@@ -24,16 +24,24 @@ int main(int argc, char *argv[])
 {
 	// Declare variables
 	int max_fd, counter, listen_fd, comms_fd, n, num_connections = 0;
-	char buffer1[128], myip[128], myport[128], nodeip[128], nodeport[128];
+	char buffer[128], myip[128], myport[128], nodeip[128], nodeport[128];
 	struct User_Commands usercomms;
 	struct Node my_connections[100] = {0};
+	for (int i = 0; i < 100; i++)
+	{
+		my_connections[i].fd = my_connections[i].id = -1;
+	}
 	struct Node self, other = {0};
 	struct Neighborhood nb;
 	struct Expedition_Table expt;
+	memset(&(expt.forward), -1, 100 * sizeof(int));
 	fd_set rfds;
 	struct sockaddr addr;
 	socklen_t addrlen;
 	List *list = Init_List();
+	struct timeval timeout;
+	timeout.tv_sec = 1;
+	timeout.tv_usec = 0;
 
 	// Process console arguments
 	Process_Console_Arguments(argc, argv, myip, myport, nodeip, nodeport);
@@ -59,6 +67,8 @@ int main(int argc, char *argv[])
 		FD_SET(STDIN_FILENO, &rfds);
 		FD_SET(listen_fd, &rfds);
 		max_fd = max(max_fd, listen_fd);
+		timeout.tv_sec = 1;
+		timeout.tv_usec = 0;
 
 		// Set the fd's of connections to other users
 		for (int temp = num_connections - 1; temp >= 0; temp--)
@@ -67,8 +77,21 @@ int main(int argc, char *argv[])
 		}
 
 		// Check which fd's are set
-		counter = select(max_fd + 1, &rfds, (fd_set *)NULL, (fd_set *)NULL, (struct timeval *)NULL);
-		if (counter <= 0)
+		counter = select(max_fd + 1, &rfds, (fd_set *)NULL, (fd_set *)NULL, &timeout);
+		if (counter == 0)
+		{
+			for (int i = 99; i >= 0; i--)
+			{
+				if (my_connections[i].fd != -1 && my_connections[i].id == -1)
+				{
+					close(my_connections[i].fd);
+					printf("FECHEI A LIGAÇÃO COM UM NÓ QUE NÃO ME MANDOU \"NEW\" ANTES DO TIMEOUT\n");
+					memcpy(&(my_connections[i]), &(my_connections[--num_connections]), sizeof(struct Node));
+					my_connections[num_connections].fd = my_connections[num_connections].id = -1;
+				}
+			}
+		}
+		else if (counter < 0)
 		{
 			printf("error: %s\n", strerror(errno));
 			exit(1);
@@ -97,9 +120,9 @@ int main(int argc, char *argv[])
 		if (FD_ISSET(STDIN_FILENO, &rfds))
 		{
 			FD_CLR(STDIN_FILENO, &rfds);
-			if (fgets(buffer1, 128, stdin))
+			if (fgets(buffer, 128, stdin))
 			{
-				Process_User_Commands(buffer1, &usercomms, &self, &other, &nb, &expt, nodeip, nodeport);
+				Process_User_Commands(buffer, &usercomms, &self, &other, &nb, &expt, nodeip, nodeport);
 
 				// According to the command given by the users, do what needs to be done to each of them
 				switch (usercomms.command)
@@ -185,22 +208,11 @@ int main(int argc, char *argv[])
 				if (FD_ISSET(my_connections[i].fd, &rfds))
 				{
 					FD_CLR(my_connections[i].fd, &rfds);
-					memset(buffer1, 0, sizeof buffer1);
-					n = read(my_connections[i].fd, buffer1, 128);
+					memset(buffer, 0, sizeof buffer);
+					n = read(my_connections[i].fd, buffer, 128);
 					if (n > 0)
 					{
-						n = Process_Incoming_Messages(&(my_connections[i]), &self, &nb, &expt, buffer1, list);
-						switch (n)
-						{
-						case 'n':
-							break;
-						case 'w':
-							/*implement broacasting of messages*/
-							break;
-
-						default:
-							break;
-						}
+						n = Process_Incoming_Messages(&(my_connections[i]), &self, &nb, &expt, buffer, list);
 					}
 					else if (n == 0)
 					{

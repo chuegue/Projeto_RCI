@@ -42,8 +42,11 @@ char *transrecieveUDP(char *ip, char *port, char *m_tosend, unsigned int n_send,
 
 void djoin(struct User_Commands *commands, struct Node *self, struct Node *other, struct Neighborhood *nb, struct Expedition_Table *expt)
 {
-	int fd;
+	int fd, counter;
 	struct addrinfo hints, *res;
+	struct timeval timeout;
+	fd_set rfds, wfds;
+
 	self->net = commands->net;
 	self->id = commands->id;
 	if (commands->id == commands->bootid) /*Primeiro nó da rede*/
@@ -66,7 +69,8 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 			printf("error: %s\n", strerror(errno));
 			exit(1);
 		}
-		setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
+		fcntl(fd, F_SETFL, O_NONBLOCK);
+		//setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
 		memset(&hints, 0, sizeof hints);
 		hints.ai_family = AF_INET;
 		hints.ai_socktype = SOCK_STREAM;
@@ -75,34 +79,131 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 			printf("error: %s\n", strerror(errno));
 			exit(1);
 		}
+		// FD_ZERO(&wfds);
+		// FD_SET(fd, &wfds);
+		FD_ZERO(&rfds);
+		FD_SET(fd, &rfds);
+		wfds = rfds;
+		timeout.tv_sec = 2;
+		timeout.tv_usec = 0;
+
 		if (connect(fd, res->ai_addr, res->ai_addrlen) == -1)
 		{
-			printf("error: %s\n", strerror(errno));
-			exit(1);
+			//printf("saí do connect\n");
+			if (errno != EINPROGRESS)
+			{
+				printf("error: %s\n", strerror(errno));
+				exit(1);
+			}
+			else
+			{
+				counter = select(fd + 1, &rfds, &wfds, NULL, &timeout);
+				if (counter == -1)
+				{
+					printf("error: %s\n", strerror(errno));
+					exit(1);
+				}
+				else if (counter == 0)
+				{
+					printf("COULDN'T CONNECT TO IP %s PORT %s\n", commands->bootip, commands->bootport);
+					other->id = -1;
+					other->fd = -1;
+					return;
+				}
+				else
+				{
+					int valopt;
+					socklen_t optlen = sizeof(valopt);
+					if (getsockopt(fd, SOL_SOCKET, SO_ERROR, (void *)&valopt, &optlen) == -1)
+					{
+						printf("error: %s\n", strerror(errno));
+						exit(1);
+					}
+					if (valopt != 0)
+					{
+						printf("error: %s\n", strerror(valopt));
+						exit(1);
+					}
+					printf("connected\n");
+					char buffer[128] = {0};
+					sprintf(buffer, "NEW %02i %.32s %.8s\n", self->id, self->ip, self->port);
+					if (write(fd, buffer, strlen(buffer)) == -1)
+					{
+						printf("error: %s\n", strerror(errno));
+						exit(1);
+					}
+					printf("EU ---> ID nº%i: %s\n", commands->bootid, buffer);
+					nb->external.id = commands->bootid;
+					strcpy(nb->external.ip, commands->bootip);
+					strcpy(nb->external.port, commands->bootport);
+					nb->external.fd = fd;
+					nb->n_internal = 0;
+					memset((void *)nb->internal, 0xFF, 100 * sizeof(struct Node));
+					memset((void *)expt->forward, 0xFF, 100 * sizeof(int));
+					expt->forward[commands->bootid] = commands->bootid;
+					other->fd = fd;
+					other->id = commands->bootid;
+					strcpy(other->ip, commands->bootip);
+					strcpy(other->port, commands->bootport);
+					other->net = commands->net;
+				}
+			}
 		}
-		char buffer[128] = {0};
-		sprintf(buffer, "NEW %02i %.32s %.8s\n", self->id, self->ip, self->port);
-		if (write(fd, buffer, strlen(buffer)) == -1)
+		else
 		{
-			printf("error: %s\n", strerror(errno));
-			exit(1);
+			printf("connected\n");
+			char buffer[128] = {0};
+			sprintf(buffer, "NEW %02i %.32s %.8s\n", self->id, self->ip, self->port);
+			if (write(fd, buffer, strlen(buffer)) == -1)
+			{
+				printf("error: %s\n", strerror(errno));
+				exit(1);
+			}
+			printf("EU ---> ID nº%i: %s\n", commands->bootid, buffer);
+			nb->external.id = commands->bootid;
+			strcpy(nb->external.ip, commands->bootip);
+			strcpy(nb->external.port, commands->bootport);
+			nb->external.fd = fd;
+			nb->n_internal = 0;
+			memset((void *)nb->internal, 0xFF, 100 * sizeof(struct Node));
+			memset((void *)expt->forward, 0xFF, 100 * sizeof(int));
+			expt->forward[commands->bootid] = commands->bootid;
+			other->fd = fd;
+			other->id = commands->bootid;
+			strcpy(other->ip, commands->bootip);
+			strcpy(other->port, commands->bootport);
+			other->net = commands->net;
 		}
-		printf("EU ---> ID nº%i: %s\n", commands->bootid, buffer);
-		nb->external.id = commands->bootid;
-		strcpy(nb->external.ip, commands->bootip);
-		strcpy(nb->external.port, commands->bootport);
-		nb->external.fd = fd;
-		nb->n_internal = 0;
-		memset((void *)nb->internal, 0xFF, 100 * sizeof(struct Node));
-		memset((void *)expt->forward, 0xFF, 100 * sizeof(int));
-		expt->forward[commands->bootid] = commands->bootid;
-		other->fd = fd;
-		other->id = commands->bootid;
-		strcpy(other->ip, commands->bootip);
-		strcpy(other->port, commands->bootport);
-		other->net = commands->net;
 	}
 }
+
+// if (connect(fd, res->ai_addr, res->ai_addrlen) == -1)
+// {
+// 	printf("error: %s\n", strerror(errno));
+// 	exit(1);
+// }
+// printf("connected\n");
+// char buffer[128] = {0};
+// sprintf(buffer, "NEW %02i %.32s %.8s\n", self->id, self->ip, self->port);
+// if (write(fd, buffer, strlen(buffer)) == -1)
+// {
+// 	printf("error: %s\n", strerror(errno));
+// 	exit(1);
+// }
+// printf("EU ---> ID nº%i: %s\n", commands->bootid, buffer);
+// nb->external.id = commands->bootid;
+// strcpy(nb->external.ip, commands->bootip);
+// strcpy(nb->external.port, commands->bootport);
+// nb->external.fd = fd;
+// nb->n_internal = 0;
+// memset((void *)nb->internal, 0xFF, 100 * sizeof(struct Node));
+// memset((void *)expt->forward, 0xFF, 100 * sizeof(int));
+// expt->forward[commands->bootid] = commands->bootid;
+// other->fd = fd;
+// other->id = commands->bootid;
+// strcpy(other->ip, commands->bootip);
+// strcpy(other->port, commands->bootport);
+// other->net = commands->net;
 
 void join(struct User_Commands *commands, struct Node *self, struct Node *other, struct Neighborhood *nb, struct Expedition_Table *expt, char *nodesip, char *nodesport)
 {

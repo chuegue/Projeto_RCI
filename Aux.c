@@ -55,7 +55,7 @@ int Gimme_Fd(int wanted_id, struct Neighborhood *nb)
 		if (nb->internal[i].id == wanted_id)
 			return nb->internal[i].fd;
 	}
-	printf("NAO ENCONTREI O ID Nº %02i POR ISSO VOU RETORNAR FD=-1. PODE DAR MERDA!\n", wanted_id);
+	printf("NAO ENCONTREI O ID Nº %02i POR ISSO VOU RETORNAR FD=-1. PODE DAR CACA!\n", wanted_id);
 	return -1;
 }
 

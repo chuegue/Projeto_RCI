@@ -50,19 +50,13 @@ void Leaving_Neighbour(struct Node *self, struct Node *leaver, struct Neighborho
 			memcpy(&(nb->internal[i]), &nb->internal[--(nb->n_internal)], sizeof(struct Node));
 			memcpy(leaver, &(connections[*num_connections - 1]), sizeof(struct Node));
 			(*num_connections)--;
+			connections[(*num_connections)].fd = connections[(*num_connections)].id = -1;
 			return;
 		}
 	}
 
 	if (nb->backup.id != self->id) // ending session with external neighbour (non anchor)
 	{
-		int i;
-		for (i = 0; i < *num_connections; i++)
-		{
-			if (connections[i].id == nb->backup.id)
-				break;
-		}
-
 		Connect_To_Backup(self, &(nb->backup));
 
 		nb->external.id = nb->backup.id;
@@ -73,22 +67,16 @@ void Leaving_Neighbour(struct Node *self, struct Node *leaver, struct Neighborho
 
 		memcpy(leaver, &(nb->external), sizeof(struct Node));
 
-		for (int i = 0; i < *num_connections; i++)
+		char outgoing_message[128] = {0};
+		sprintf(outgoing_message, "EXTERN %02i %.32s %.8s\n", nb->external.id, nb->external.ip, nb->external.port);
+		for (int j = 0; j < nb->n_internal; j++)
 		{
-			char outgoing_message[128] = {0};
-			sprintf(outgoing_message, "EXTERN %02i %.32s %.8s\n", nb->external.id, nb->external.ip, nb->external.port);
-			for (int j = 0; j < nb->n_internal; j++)
+			if (write(nb->internal[j].fd, outgoing_message, strlen(outgoing_message)) == -1)
 			{
-				if (connections[i].id == nb->internal[j].id)
-				{
-					if (write(connections[i].fd, outgoing_message, strlen(outgoing_message)) == -1)
-					{
-						printf("error: %s\n", strerror(errno));
-						exit(1);
-					}
-					printf("EU ---> ID nº%i: %s\n", connections[i].id, outgoing_message);
-				}
+				printf("error: %s\n", strerror(errno));
+				exit(1);
 			}
+			printf("EU ---> ID nº%i: %s\n", nb->internal[j].id, outgoing_message);
 		}
 	}
 	else if (nb->n_internal != 0) // ending session with external neighbour (ânchor)
@@ -98,6 +86,7 @@ void Leaving_Neighbour(struct Node *self, struct Node *leaver, struct Neighborho
 
 		memcpy(leaver, &(connections[*num_connections - 1]), sizeof(struct Node));
 		(*num_connections)--;
+		connections[(*num_connections)].fd = connections[(*num_connections)].id = -1;
 
 		char outgoing_message[128] = {0};
 		sprintf(outgoing_message, "EXTERN %02i %.32s %.8s\n", nb->external.id, nb->external.ip, nb->external.port);
@@ -108,7 +97,7 @@ void Leaving_Neighbour(struct Node *self, struct Node *leaver, struct Neighborho
 				printf("error: %s\n", strerror(errno));
 				exit(1);
 			}
-			printf("EU ---> ID nº%i: %s\n", connections[i].id, outgoing_message);
+			printf("EU ---> ID nº%i: %s\n", nb->internal[j].id, outgoing_message);
 		}
 
 		memset(&(nb->internal[--(nb->n_internal)]), -1, sizeof(struct Node));
@@ -117,12 +106,12 @@ void Leaving_Neighbour(struct Node *self, struct Node *leaver, struct Neighborho
 	{
 		memcpy(&(nb->external), self, sizeof(struct Node));
 		(*num_connections)--;
+		connections[(*num_connections)].fd = connections[(*num_connections)].id = -1;
 	}
 }
 
 void Show_Topology(struct Neighborhood *nb, struct Node connections[100], int num_connections)
 {
-
 	printf("------ TOPOLOGY ------  \n");
 	printf("VIZINHOS INTERNOS \n");
 	for (int i = 0; i < num_connections; i++)
