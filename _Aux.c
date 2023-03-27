@@ -68,12 +68,12 @@ void Change_Node(struct Node *this_to, struct Node *that)
 	that->fd = this_to->fd;
 }
 
-int Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neighborhood *nb, struct Expedition_Table *expt, char incoming_message[128], List *list)
+void Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neighborhood *nb, struct Expedition_Table *expt, char incoming_message[128], List *list)
 {
 	strcat(other->buffer, incoming_message);
 	if (strstr(other->buffer, "\n") == NULL)
 	{
-		return 0;
+		return;
 	}
 	char processed_message[128] = {0};
 	int b, c;
@@ -138,7 +138,6 @@ int Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neig
 			exit(1);
 		}
 		printf("EU ---> ID nº%i: %s\n", other->id, outgoing_message);
-		return 'n';
 	}
 	else if (strcmp(token, "EXTERN") == 0)
 	{
@@ -173,7 +172,6 @@ int Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neig
 			expt->forward[e] = other->id;
 		}
 		printf("EU <--- ID nº%i: %s\n", other->id, holder);
-		return 'e';
 	}
 	else if (strcmp(token, "QUERY") == 0)
 	{
@@ -304,7 +302,5 @@ int Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neig
 		}
 		id = atoi(token);
 		Withdraw(other->id, id, nb, expt);
-		return 'w';
 	}
-	return 0;
 }

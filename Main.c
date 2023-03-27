@@ -212,7 +212,7 @@ int main(int argc, char *argv[])
 					n = read(my_connections[i].fd, incoming_message, 128);
 					if (n > 0)
 					{
-						n = Process_Incoming_Messages(&(my_connections[i]), &self, &nb, &expt, incoming_message, list);
+						Process_Incoming_Messages(&(my_connections[i]), &self, &nb, &expt, incoming_message, list);
 					}
 					else if (n == 0)
 					{
