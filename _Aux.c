@@ -77,12 +77,13 @@ void Process_Incoming_Messages(struct Node *other, struct Node *self, struct Nei
 	}
 	char processed_message[128] = {0};
 	int b, c;
-	for (c = 0; other->buffer[c] != '\n'; c++)
+	for (c = 0; other->buffer[c] != '\n' && c < sizeof processed_message; c++)
 	{
 		processed_message[c] = other->buffer[c];
 	}
-	processed_message[c] = other->buffer[c];
-	for (b = 0, c = c + 1; other->buffer[c] != '\0'; c++, b++)
+	if (c < sizeof processed_message)
+		processed_message[c] = other->buffer[c];
+	for (b = 0, c = c + 1; other->buffer[c] != '\0' && c < sizeof other->buffer; c++, b++)
 	{
 		other->buffer[b] = other->buffer[c];
 	}

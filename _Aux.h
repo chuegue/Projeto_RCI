@@ -16,6 +16,7 @@
 #include <netdb.h>
 #include <errno.h>
 #include <time.h>
+#include <assert.h>
 #include "Structs.h"
 #include "List.h"
 #include "Routing.h"

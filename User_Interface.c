@@ -70,7 +70,6 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 			exit(1);
 		}
 		fcntl(fd, F_SETFL, O_NONBLOCK);
-		//setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
 		memset(&hints, 0, sizeof hints);
 		hints.ai_family = AF_INET;
 		hints.ai_socktype = SOCK_STREAM;
@@ -124,7 +123,6 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 						printf("error: %s\n", strerror(valopt));
 						exit(1);
 					}
-					printf("connected\n");
 					char buffer[128] = {0};
 					sprintf(buffer, "NEW %02i %.32s %.8s\n", self->id, self->ip, self->port);
 					if (write(fd, buffer, strlen(buffer)) == -1)
@@ -151,7 +149,6 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 		}
 		else
 		{
-			printf("connected\n");
 			char buffer[128] = {0};
 			sprintf(buffer, "NEW %02i %.32s %.8s\n", self->id, self->ip, self->port);
 			if (write(fd, buffer, strlen(buffer)) == -1)
@@ -175,6 +172,7 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 			other->net = commands->net;
 		}
 	}
+	freeaddrinfo(res);
 }
 
 // if (connect(fd, res->ai_addr, res->ai_addrlen) == -1)

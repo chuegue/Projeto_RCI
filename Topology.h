@@ -15,12 +15,13 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <errno.h>
+#include <fcntl.h>
 // #include <time.h>
 #include "Structs.h"
 #include "Routing.h"
 
-void Connect_To_Backup(struct Node *self, struct Node *backup);
-void Leaving_Neighbour(struct Node *self, struct Node *leaver, struct Neighborhood *nb, struct Expedition_Table *expt, struct Node connections[100], int *num_connections);
+int Connect_To_Backup(struct Node *self, struct Node *backup);
+int Leaving_Neighbour(struct Node *self, struct Node *leaver, struct Neighborhood *nb, struct Expedition_Table *expt, struct Node connections[100], int *num_connections);
 void Show_Topology(struct Neighborhood *nb, struct Node connections[100], int num_connections);
 
 #endif

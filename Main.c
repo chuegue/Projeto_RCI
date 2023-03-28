@@ -32,7 +32,12 @@ int main(int argc, char *argv[])
 		my_connections[i].fd = my_connections[i].id = -1;
 	}
 	struct Node self, other = {0};
-	struct Neighborhood nb;
+	struct Neighborhood nb = {0};
+	nb.external.id = nb.external.fd = nb.backup.id = nb.backup.fd = -1;
+	for (int i = 0; i < 100; i++)
+	{
+		nb.internal[i].id = nb.internal[i].fd = -1;
+	}
 	struct Expedition_Table expt;
 	memset(&(expt.forward), -1, 100 * sizeof(int));
 	fd_set rfds;
@@ -97,25 +102,6 @@ int main(int argc, char *argv[])
 			exit(1);
 		}
 
-		// Check if there is any incoming new connections
-		if (FD_ISSET(listen_fd, &rfds))
-		{
-			FD_CLR(listen_fd, &rfds);
-			addrlen = sizeof(addr);
-			if ((comms_fd = accept(listen_fd, &addr, &addrlen)) == -1)
-			{
-				printf("error: %s\n", strerror(errno));
-				exit(1);
-			}
-			printf("\nCONNECTION IN FILE DESCRIPTOR Nº%i\n", comms_fd);
-
-			// Update array of connections to include the new fd
-			my_connections[num_connections++].fd = comms_fd;
-			// Update max_fd
-			max_fd = max(max_fd, comms_fd);
-			counter--;
-		}
-
 		// Check if there is any input in the standard input
 		if (FD_ISSET(STDIN_FILENO, &rfds))
 		{
@@ -169,6 +155,7 @@ int main(int argc, char *argv[])
 						close(my_connections[i].fd);
 					}
 					num_connections = 0;
+					max_fd = listen_fd;
 					break;
 				case 10:
 					Free_List(list);
@@ -179,12 +166,6 @@ int main(int argc, char *argv[])
 					{
 						printf("ID: %02i\nNET: %02i\nIP: %.32s\nPORT: %.8s\nFD: %i\n\n", my_connections[i].id, my_connections[i].net, my_connections[i].ip, my_connections[i].port, my_connections[i].fd);
 					}
-					printf("NEIGHBOURHOOD:\nEXTERN: %i\nBACKUP: %i\nINTERNALS: %i ---> ", nb.external.id, nb.backup.id, nb.n_internal);
-					for (int i = 0; i < nb.n_internal; i++)
-					{
-						printf("%i ", nb.internal[i].id);
-					}
-					printf("\n\n");
 					break;
 				default:
 					break;
@@ -199,8 +180,26 @@ int main(int argc, char *argv[])
 		}
 
 		// Check for any incoming messages from other nodes
-		for (; counter /*>0*/; --counter)
+		while (counter)
 		{
+			// Check if there is any incoming new connections
+			if (FD_ISSET(listen_fd, &rfds))
+			{
+				FD_CLR(listen_fd, &rfds);
+				addrlen = sizeof(addr);
+				if ((comms_fd = accept(listen_fd, &addr, &addrlen)) == -1)
+				{
+					printf("error: %s\n", strerror(errno));
+					exit(1);
+				}
+				printf("\nCONNECTION IN FILE DESCRIPTOR Nº%i\n", comms_fd);
+
+				// Update array of connections to include the new fd
+				my_connections[num_connections++].fd = comms_fd;
+				// Update max_fd
+				max_fd = max(max_fd, comms_fd);
+				counter--;
+			}
 			// Loop through all of the other nodes
 			for (int i = num_connections - 1; i >= 0; i--)
 			{
@@ -209,7 +208,7 @@ int main(int argc, char *argv[])
 				{
 					FD_CLR(my_connections[i].fd, &rfds);
 					memset(incoming_message, 0, sizeof incoming_message);
-					n = read(my_connections[i].fd, incoming_message, 128);
+					n = read(my_connections[i].fd, incoming_message, 1024);
 					if (n > 0)
 					{
 						Process_Incoming_Messages(&(my_connections[i]), &self, &nb, &expt, incoming_message, list);
@@ -219,12 +218,24 @@ int main(int argc, char *argv[])
 						close(my_connections[i].fd);
 						expt.forward[my_connections[i].id] = -1;
 						printf("este malandro saiu: %i \n", my_connections[i].id);
-						Leaving_Neighbour(&self, &(my_connections[i]), &nb, &expt, my_connections, &num_connections);
-						max_fd = 0;
-						for (int i = 0; i < num_connections; i++)
+						if (Leaving_Neighbour(&self, &(my_connections[i]), &nb, &expt, my_connections, &num_connections) == 1)
 						{
-							if (my_connections[i].fd > max_fd)
-								max_fd = my_connections[i].fd;
+							max_fd = 0;
+							for (int i = 0; i < num_connections; i++)
+							{
+								if (my_connections[i].fd > max_fd)
+									max_fd = my_connections[i].fd;
+							}
+						}
+						else
+						{
+							for (int i = 0; i < num_connections; i++)
+							{
+								close(my_connections[i].fd);
+							}
+							num_connections = 0;
+							max_fd = listen_fd;
+							leave(&self, &nb, &expt, nodeip, nodeport);
 						}
 					}
 					else if (n == -1)
@@ -232,6 +243,7 @@ int main(int argc, char *argv[])
 						printf("error: %s\n", strerror(errno));
 						exit(1);
 					}
+					counter--;
 				}
 			}
 		}
