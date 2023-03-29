@@ -29,6 +29,7 @@ void Process_Console_Arguments(int argc, char *argv[], char myip[128], char mypo
 void missing_arguments();
 int Gimme_Fd(int wanted_id, struct Neighborhood *nb);
 void Change_Node(struct Node *this_to, struct Node *that);
+void Clean_Neighborhood(struct Neighborhood *nb);
 void Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neighborhood *nb, struct Expedition_Table *expt, char incoming_message[128], List *list);
 
 #endif

@@ -187,11 +187,11 @@ void Show_Topology(struct Neighborhood *nb)
 
 	printf("VIZINHO EXTERNO \n");
 	if (nb->external.id != -1)
-		printf("id: %i \t ip: %s \t port: %s \n \n", nb->external.id, nb->external.ip, nb->external.port);
+		printf("id: %i \t ip: %s \t port: %s \n", nb->external.id, nb->external.ip, nb->external.port);
 	printf("\n");
 
 	printf("VIZINHO DE RECUPERAÇÃO \n");
 	if (nb->backup.id != -1)
-		printf("id: %i \t ip: %s \t port: %s \n \n", nb->backup.id, nb->backup.ip, nb->backup.port);
+		printf("id: %i \t ip: %s \t port: %s \n", nb->backup.id, nb->backup.ip, nb->backup.port);
 	printf("\n");
 }

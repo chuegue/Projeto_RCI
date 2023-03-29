@@ -175,39 +175,11 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 	freeaddrinfo(res);
 }
 
-// if (connect(fd, res->ai_addr, res->ai_addrlen) == -1)
-// {
-// 	printf("error: %s\n", strerror(errno));
-// 	exit(1);
-// }
-// printf("connected\n");
-// char buffer[128] = {0};
-// sprintf(buffer, "NEW %02i %.32s %.8s\n", self->id, self->ip, self->port);
-// if (write(fd, buffer, strlen(buffer)) == -1)
-// {
-// 	printf("error: %s\n", strerror(errno));
-// 	exit(1);
-// }
-// printf("EU ---> ID nº%i: %s\n", commands->bootid, buffer);
-// nb->external.id = commands->bootid;
-// strcpy(nb->external.ip, commands->bootip);
-// strcpy(nb->external.port, commands->bootport);
-// nb->external.fd = fd;
-// nb->n_internal = 0;
-// memset((void *)nb->internal, 0xFF, 100 * sizeof(struct Node));
-// memset((void *)expt->forward, 0xFF, 100 * sizeof(int));
-// expt->forward[commands->bootid] = commands->bootid;
-// other->fd = fd;
-// other->id = commands->bootid;
-// strcpy(other->ip, commands->bootip);
-// strcpy(other->port, commands->bootport);
-// other->net = commands->net;
-
 void join(struct User_Commands *commands, struct Node *self, struct Node *other, struct Neighborhood *nb, struct Expedition_Table *expt, char *nodesip, char *nodesport)
 {
 	char server_response[100][128], copy[128][100], buffer[128] = {0}, *received, *tok;
 	unsigned int n_received, i = 0, j = 0, chosen;
-	int ids[100], is_repeated, n, max_id = 0, t = 0;
+	int ids[100], is_repeated, n, max_id = -1, t = 0;
 	memset(ids, -1, 100 * sizeof(int));
 	sprintf(buffer, "NODES %03i", commands->net);
 	received = transrecieveUDP(nodesip, nodesport, buffer, strlen(buffer), &n_received);
@@ -250,7 +222,7 @@ void join(struct User_Commands *commands, struct Node *self, struct Node *other,
 		}
 		if (is_repeated)
 		{
-			for (t = 0; t < max_id; t++)
+			for (t = 0; t < 100; t++)
 			{
 				if (ids[t] == -1)
 				{
@@ -301,18 +273,7 @@ void leave(struct Node *self, struct Neighborhood *nb, struct Expedition_Table *
 	printf("EU <--- SERVIDOR DE NOS: %s\n", received);
 	free(received);
 
-	printf("nb antes do memset \n");
-	printf("VIZINHO EXTERNO \n");
-	printf("id: %i \t ip: %s \t port: %s \n \n", nb->external.id, nb->external.ip, nb->external.port);
-
-	printf("VIZINHO DE RECUPERAÇÃO \n");
-	printf("id: %i \t ip: %s \t port: %s \n \n", nb->backup.id, nb->backup.ip, nb->backup.port);
-
-	memset(nb, -1, sizeof(struct Neighborhood));
-	memset(nb->backup.ip, '\0', sizeof nb->backup.ip);
-	memset(nb->backup.port, '\0', sizeof nb->backup.port);
-	memset(nb->external.ip, '\0', sizeof nb->external.ip);
-	memset(nb->external.port, '\0', sizeof nb->external.port);
+	Clean_Neighborhood(nb);
 	memset(expt, -1, sizeof(struct Expedition_Table));
 }
 
@@ -450,8 +411,9 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 			}
 			token = strtok(NULL, " ");
 		}
-		other->id = -1;
-		Send_Query(commands->id, self->id, commands->name, other, nb, expt);
+		other->id = -1; //nao apagar, esta aqui por uma razao
+		if (commands->id != self->id)
+			Send_Query(commands->id, self->id, commands->name, other, nb, expt);
 	}
 	else if (strcmp(token, "clear") == 0)
 	{
@@ -514,6 +476,7 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 	else if (strstr(message, "exit") != NULL)
 	{
 		commands->command = 10;
+		leave(self, nb, expt, nodesip, nodesport);
 	}
 	else if (strstr(message, "connections") != NULL)
 	{
