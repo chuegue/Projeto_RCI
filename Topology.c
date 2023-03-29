@@ -172,20 +172,26 @@ int Leaving_Neighbour(struct Node *self, struct Node *leaver, struct Neighborhoo
 	return 1;
 }
 
-void Show_Topology(struct Neighborhood *nb, struct Node connections[100], int num_connections)
+void Show_Topology(struct Neighborhood *nb)
 {
 	printf("------ TOPOLOGY ------  \n");
+	if (nb->n_internal == 0 && nb->backup.id == -1 && nb->external.id == -1)
+		return;
+
 	printf("VIZINHOS INTERNOS \n");
-	for (int i = 0; i < num_connections; i++)
+	for (int i = 0; i < nb->n_internal; i++)
 	{
-		if ((connections[i].id != nb->external.id) && (connections[i].id != nb->backup.id))
-			printf("id: %i \t ip: %s \t port: %s \n", connections[i].id, connections[i].ip, connections[i].port);
+		printf("id: %i \t ip: %s \t port: %s \n", nb->internal[i].id, nb->internal[i].ip, nb->internal[i].port);
 	}
 	printf("\n");
 
 	printf("VIZINHO EXTERNO \n");
-	printf("id: %i \t ip: %s \t port: %s \n \n", nb->external.id, nb->external.ip, nb->external.port);
+	if (nb->external.id != -1)
+		printf("id: %i \t ip: %s \t port: %s \n \n", nb->external.id, nb->external.ip, nb->external.port);
+	printf("\n");
 
 	printf("VIZINHO DE RECUPERAÇÃO \n");
-	printf("id: %i \t ip: %s \t port: %s \n \n", nb->backup.id, nb->backup.ip, nb->backup.port);
+	if (nb->backup.id != -1)
+		printf("id: %i \t ip: %s \t port: %s \n \n", nb->backup.id, nb->backup.ip, nb->backup.port);
+	printf("\n");
 }

@@ -134,7 +134,7 @@ int main(int argc, char *argv[])
 					list = Delete_At_Index_Lista(list, Search_Item_List(list, usercomms.name));
 					break;
 				case 6: // show topology
-					Show_Topology(&nb, my_connections, num_connections);
+					Show_Topology(&nb);
 					break;
 				case 7: // show names
 					printf("------ NAMES ------  \n");
@@ -155,6 +155,7 @@ int main(int argc, char *argv[])
 						close(my_connections[i].fd);
 					}
 					num_connections = 0;
+					printf("num_connections after leave: %i\n", num_connections);
 					max_fd = listen_fd;
 					break;
 				case 10:

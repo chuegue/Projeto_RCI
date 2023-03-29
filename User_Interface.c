@@ -88,7 +88,7 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 
 		if (connect(fd, res->ai_addr, res->ai_addrlen) == -1)
 		{
-			//printf("saí do connect\n");
+			// printf("saí do connect\n");
 			if (errno != EINPROGRESS)
 			{
 				printf("error: %s\n", strerror(errno));
@@ -300,7 +300,19 @@ void leave(struct Node *self, struct Neighborhood *nb, struct Expedition_Table *
 	}
 	printf("EU <--- SERVIDOR DE NOS: %s\n", received);
 	free(received);
+
+	printf("nb antes do memset \n");
+	printf("VIZINHO EXTERNO \n");
+	printf("id: %i \t ip: %s \t port: %s \n \n", nb->external.id, nb->external.ip, nb->external.port);
+
+	printf("VIZINHO DE RECUPERAÇÃO \n");
+	printf("id: %i \t ip: %s \t port: %s \n \n", nb->backup.id, nb->backup.ip, nb->backup.port);
+
 	memset(nb, -1, sizeof(struct Neighborhood));
+	memset(nb->backup.ip, '\0', sizeof nb->backup.ip);
+	memset(nb->backup.port, '\0', sizeof nb->backup.port);
+	memset(nb->external.ip, '\0', sizeof nb->external.ip);
+	memset(nb->external.port, '\0', sizeof nb->external.port);
 	memset(expt, -1, sizeof(struct Expedition_Table));
 }
 
