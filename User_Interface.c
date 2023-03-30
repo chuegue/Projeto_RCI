@@ -244,7 +244,7 @@ void join(struct User_Commands *commands, struct Node *self, struct Node *other,
 		djoin(commands, self, other, nb, expt);
 	}
 	free(received);
-	if(other->id != -1)
+	if (other->id != -1)
 	{
 		memset(buffer, 0, sizeof buffer);
 		sprintf(buffer, "REG %03i %02i %.32s %.8s", commands->net, commands->id, self->ip, self->port);
@@ -281,6 +281,7 @@ void leave(struct Node *self, struct Neighborhood *nb, struct Expedition_Table *
 
 	Clean_Neighborhood(nb);
 	memset(expt, -1, sizeof(struct Expedition_Table));
+	self->net = -1;
 }
 
 void Process_User_Commands(char message[128], struct User_Commands *commands, struct Node *self, struct Node *other, struct Neighborhood *nb, struct Expedition_Table *expt, char *nodesip, char *nodesport)
@@ -312,7 +313,8 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 			}
 			token = strtok(NULL, " ");
 		}
-		join(commands, self, other, nb, expt, nodesip, nodesport);
+		if (self->net == -1)
+			join(commands, self, other, nb, expt, nodesip, nodesport);
 		return;
 	}
 
@@ -354,7 +356,8 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 
 			token = strtok(NULL, " ");
 		}
-		djoin(commands, self, other, nb, expt);
+		if (self->net == -1)
+			djoin(commands, self, other, nb, expt);
 		return;
 	}
 
@@ -417,9 +420,13 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 			}
 			token = strtok(NULL, " ");
 		}
-		other->id = -1; //nao apagar, esta aqui por uma razao
-		if (commands->id != self->id)
-			Send_Query(commands->id, self->id, commands->name, other, nb, expt);
+		other->id = -1; // nao apagar, esta aqui por uma razao
+		if (self->net != -1)
+		{
+			if (commands->id != self->id)
+				Send_Query(commands->id, self->id, commands->name, other, nb, expt);
+		}
+		return;
 	}
 	else if (strcmp(token, "clear") == 0)
 	{
@@ -429,23 +436,28 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 			commands->command = 11;
 			memset(expt->forward, -1, 100 * sizeof(int));
 		}
+		return;
 	}
 	else if (strstr(message, "cr") != NULL)
 	{
 		commands->command = 11;
 		memset(expt->forward, -1, 100 * sizeof(int));
+		return;
 	}
 	else if (strstr(message, "st") != NULL)
 	{
 		commands->command = 6;
+		return;
 	}
 	else if (strstr(message, "sn") != NULL)
 	{
 		commands->command = 7;
+		return;
 	}
 	else if (strstr(message, "sr") != NULL)
 	{
 		commands->command = 8;
+		return;
 	}
 	// show topology || show names || show routing
 	else if (strcmp(token, "show") == 0)
@@ -458,14 +470,17 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 		else if (strstr(token, "topology") != NULL)
 		{
 			commands->command = 6;
+			return;
 		}
 		else if (strstr(token, "names") != NULL)
 		{
 			commands->command = 7;
+			return;
 		}
 		else if (strstr(token, "routing") != NULL)
 		{
 			commands->command = 8;
+			return;
 		}
 		else
 		{
@@ -483,9 +498,6 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 	{
 		commands->command = 10;
 		leave(self, nb, expt, nodesip, nodesport);
-	}
-	else if (strstr(message, "connections") != NULL)
-	{
-		commands->command = 69;
+		return;
 	}
 }

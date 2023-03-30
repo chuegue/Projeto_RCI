@@ -23,5 +23,6 @@
 int Connect_To_Backup(struct Node *self, struct Node *backup);
 int Leaving_Neighbour(struct Node *self, struct Node *leaver, struct Neighborhood *nb, struct Expedition_Table *expt, struct Node connections[100], int *num_connections);
 void Show_Topology(struct Neighborhood *nb);
+void Show_Routing(struct Expedition_Table *expt);
 
 #endif

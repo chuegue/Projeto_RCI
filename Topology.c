@@ -194,3 +194,14 @@ void Show_Topology(struct Neighborhood *nb)
 		printf("id: %i \t ip: %s \t port: %s \n", nb->backup.id, nb->backup.ip, nb->backup.port);
 	printf("\n");
 }
+
+void Show_Routing(struct Expedition_Table *expt)
+{
+	printf("------ ROUTING ------  \n");
+	for (int i = 0; i < 100; i++)
+	{
+		if (expt->forward[i] == -1)
+			continue;
+		printf("%02i ---> %02i\n", i, expt->forward[i]);
+	}
+}

@@ -134,39 +134,42 @@ int main(int argc, char *argv[])
 					list = Delete_At_Index_Lista(list, Search_Item_List(list, usercomms.name));
 					break;
 				case 6: // show topology
-					Show_Topology(&nb);
-					break;
+					if (self.net != -1)
+					{
+						Show_Topology(&nb);
+						break;
+					}
+					else
+					{
+						printf("You are not in a network! \n");
+					}
+
 				case 7: // show names
 					printf("------ NAMES ------  \n");
 					Print_List(list);
 					break;
 				case 8: // show routing
-					printf("------ ROUTING ------  \n");
-					for (int i = 0; i < 100; i++)
+					if (self.net != -1)
 					{
-						if (expt.forward[i] == -1)
-							continue;
-						printf("%02i ---> %02i\n", i, expt.forward[i]);
+						Show_Routing(&expt);
+						break;
 					}
-					break;
+					else
+					{
+						printf("You are not in a network! \n");
+					}
+
 				case 9: // leave
 					for (int i = 0; i < num_connections; i++)
 					{
 						close(my_connections[i].fd);
 					}
 					num_connections = 0;
-					printf("num_connections after leave: %i\n", num_connections);
 					max_fd = listen_fd;
 					break;
-				case 10:
+				case 10: // exit
 					Free_List(list);
 					exit(0);
-					break;
-				case 69:
-					for (int i = 0; i < num_connections; i++)
-					{
-						printf("ID: %02i\nNET: %02i\nIP: %.32s\nPORT: %.8s\nFD: %i\n\n", my_connections[i].id, my_connections[i].net, my_connections[i].ip, my_connections[i].port, my_connections[i].fd);
-					}
 					break;
 				default:
 					break;
