@@ -190,6 +190,7 @@ int main(int argc, char *argv[])
 				addrlen = sizeof(addr);
 				if ((comms_fd = accept(listen_fd, &addr, &addrlen)) == -1)
 				{
+					printf("accept\n");
 					printf("error: %s\n", strerror(errno));
 					exit(1);
 				}

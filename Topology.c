@@ -122,7 +122,6 @@ int Leaving_Neighbour(struct Node *self, struct Node *leaver, struct Neighborhoo
 		strcpy(nb->external.port, nb->backup.port);
 		memset(nb->external.buffer, '\0', sizeof nb->external.buffer);
 		nb->external.fd = nb->backup.fd;
-		expt->forward[nb->external.id] = nb->external.id;
 
 		memcpy(leaver, &(nb->external), sizeof(struct Node));
 

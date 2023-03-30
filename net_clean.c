@@ -54,13 +54,13 @@ char *transrecieveUDP(char *ip, char *port, char *m_tosend, unsigned int n_send,
 int main(int argc, char *argv[])
 {
     char message[128] = {0}, supposed[128] = {0}, **save_ptr, *receive1, *receive2, *token;
-    int n_received, i = 37;
+    int n_received, i = 905;
 
     printf("REDE Nº: %03i\n", i);
     memset(message, 0, sizeof message);
     sprintf(message, "NODES %03i", i);
     sprintf(supposed, "NODESLIST %03i", i);
-    receive1 = transrecieveUDP("193.136.138.142", "59000", message, strlen(message), &n_received);
+    receive1 = transrecieveUDP("192.168.1.1", "59000", message, strlen(message), &n_received);
     printf("Recebi a mensagem \n%s\n\n", receive1);
     token = strtok_r(receive1, "\n", &receive1);
     if (strcmp(token, supposed) != 0)
@@ -74,7 +74,7 @@ int main(int argc, char *argv[])
         token = strtok(token, " ");
         memset(message, 0, sizeof message);
         sprintf(message, "UNREG %03i %02i", i, atoi(token));
-        receive2 = transrecieveUDP("193.136.138.142", "59000", message, strlen(message), &n_received);
+        receive2 = transrecieveUDP("192.168.1.1", "59000", message, strlen(message), &n_received);
         if (strcmp(receive2, "OKUNREG") != 0)
         {
             printf("DEU MERDA FAMILIA\n");

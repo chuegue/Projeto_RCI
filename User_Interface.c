@@ -91,6 +91,7 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 			// printf("saí do connect\n");
 			if (errno != EINPROGRESS)
 			{
+				printf("erro no connect != EINPROGRESS\n");
 				printf("error: %s\n", strerror(errno));
 				exit(1);
 			}
@@ -99,6 +100,8 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 				counter = select(fd + 1, &rfds, &wfds, NULL, &timeout);
 				if (counter == -1)
 				{
+
+					printf("erro no select do connect do djoin\n");
 					printf("error: %s\n", strerror(errno));
 					exit(1);
 				}
@@ -120,8 +123,10 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 					}
 					if (valopt != 0)
 					{
-						printf("error: %s\n", strerror(valopt));
-						exit(1);
+						printf("COULDN'T CONNECT TO IP %s PORT %s\n", commands->bootip, commands->bootport);
+						other->id = -1;
+						other->fd = -1;
+						return;
 					}
 					char buffer[128] = {0};
 					sprintf(buffer, "NEW %02i %.32s %.8s\n", self->id, self->ip, self->port);
@@ -138,7 +143,6 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 					nb->n_internal = 0;
 					memset((void *)nb->internal, 0xFF, 100 * sizeof(struct Node));
 					memset((void *)expt->forward, 0xFF, 100 * sizeof(int));
-					expt->forward[commands->bootid] = commands->bootid;
 					other->fd = fd;
 					other->id = commands->bootid;
 					strcpy(other->ip, commands->bootip);
@@ -164,7 +168,6 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 			nb->n_internal = 0;
 			memset((void *)nb->internal, 0xFF, 100 * sizeof(struct Node));
 			memset((void *)expt->forward, 0xFF, 100 * sizeof(int));
-			expt->forward[commands->bootid] = commands->bootid;
 			other->fd = fd;
 			other->id = commands->bootid;
 			strcpy(other->ip, commands->bootip);
@@ -241,18 +244,21 @@ void join(struct User_Commands *commands, struct Node *self, struct Node *other,
 		djoin(commands, self, other, nb, expt);
 	}
 	free(received);
-	memset(buffer, 0, sizeof buffer);
-	sprintf(buffer, "REG %03i %02i %.32s %.8s", commands->net, commands->id, self->ip, self->port);
-	printf("EU ---> SERVIDOR DE NOS: %s\n", buffer);
-	received = transrecieveUDP(nodesip, nodesport, buffer, strlen(buffer), &n_received);
-	if (strcmp(received, "OKREG") != 0)
+	if(other->id != -1)
 	{
+		memset(buffer, 0, sizeof buffer);
+		sprintf(buffer, "REG %03i %02i %.32s %.8s", commands->net, commands->id, self->ip, self->port);
+		printf("EU ---> SERVIDOR DE NOS: %s\n", buffer);
+		received = transrecieveUDP(nodesip, nodesport, buffer, strlen(buffer), &n_received);
+		if (strcmp(received, "OKREG") != 0)
+		{
+			free(received);
+			printf("ERRO: REG NÃO RESPONDEU OKREG\nRESPONDEU %s\n", received);
+			exit(1);
+		}
+		printf("EU <--- SERVIDOR DE NOS: %s\n", received);
 		free(received);
-		printf("ERRO: REG NÃO RESPONDEU OKREG\nRESPONDEU %s\n", received);
-		exit(1);
 	}
-	printf("EU <--- SERVIDOR DE NOS: %s\n", received);
-	free(received);
 }
 
 void leave(struct Node *self, struct Neighborhood *nb, struct Expedition_Table *expt, char *nodesip, char *nodesport)

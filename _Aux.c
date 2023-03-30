@@ -135,7 +135,6 @@ void Process_Incoming_Messages(struct Node *other, struct Node *self, struct Nei
 				token = strtok(NULL, " ");
 			}
 			printf("EU <--- ID nº%i: %s\n", other->id, holder);
-			expt->forward[other->id] = other->id;
 			if (nb->external.id == self->id) // tou sozinho, quero ancora
 			{
 				memcpy(&(nb->external), other, sizeof(struct Node));
@@ -180,10 +179,6 @@ void Process_Incoming_Messages(struct Node *other, struct Node *self, struct Nei
 					break;
 				}
 				token = strtok(NULL, " ");
-			}
-			if (e != self->id)
-			{
-				expt->forward[e] = other->id;
 			}
 			printf("EU <--- ID nº%i: %s\n", other->id, holder);
 		}
