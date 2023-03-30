@@ -44,7 +44,9 @@ int Connect_To_Backup(struct Node *self, struct Node *backup)
 			}
 			else if (counter == 0)
 			{
-				printf("COULDN'T CONNECT TO IP %s PORT %s\n", backup->ip, backup->port);
+				printf("COULDN'T CONNECT TO BACKUP | IP %s PORT %s\n", backup->ip, backup->port);
+				// self->id = -1;
+				// self->net = -1;
 				return -1;
 			}
 			else
@@ -58,8 +60,10 @@ int Connect_To_Backup(struct Node *self, struct Node *backup)
 				}
 				if (valopt != 0)
 				{
-					printf("error: %s\n", strerror(valopt));
-					exit(1);
+					printf("COULDN'T CONNECT TO BACKUP | IP %s PORT %s\n", backup->ip, backup->port);
+					// self->id = -1;
+					// self->net = -1;
+					return -1;
 				}
 				char buffer[128] = {0};
 				sprintf(buffer, "NEW %02i %.32s %.8s\n", self->id, self->ip, self->port);
@@ -193,15 +197,4 @@ void Show_Topology(struct Neighborhood *nb)
 	if (nb->backup.id != -1)
 		printf("id: %i \t ip: %s \t port: %s \n", nb->backup.id, nb->backup.ip, nb->backup.port);
 	printf("\n");
-}
-
-void Show_Routing(struct Expedition_Table *expt)
-{
-	printf("------ ROUTING ------  \n");
-	for (int i = 0; i < 100; i++)
-	{
-		if (expt->forward[i] == -1)
-			continue;
-		printf("%02i ---> %02i\n", i, expt->forward[i]);
-	}
 }

@@ -38,9 +38,9 @@ void Process_Console_Arguments(int argc, char *argv[], char myip[128], char mypo
 	strcpy(nodeport, argv[4]);
 }
 
-void missing_arguments()
+void Missing_Arguments()
 {
-	printf(" Faltam argumentos! \n");
+	printf("Missing Arguments! \n");
 }
 
 int Gimme_Fd(int wanted_id, struct Neighborhood *nb)
@@ -87,7 +87,6 @@ void Process_Incoming_Messages(struct Node *other, struct Node *self, struct Nei
 	strcat(other->buffer, incoming_message);
 	while (strstr(other->buffer, "\n") != NULL)
 	{
-
 		char processed_message[128] = {0};
 		int b, c;
 		for (c = 0; other->buffer[c] != '\n' && c < sizeof processed_message; c++)
@@ -115,7 +114,7 @@ void Process_Incoming_Messages(struct Node *other, struct Node *self, struct Nei
 			{
 				if (token == NULL) // certifica que tem o numero de argumentos necessários
 				{
-					missing_arguments();
+					Missing_Arguments();
 					exit(1);
 				}
 				switch (k)
@@ -160,7 +159,7 @@ void Process_Incoming_Messages(struct Node *other, struct Node *self, struct Nei
 			{
 				if (token == NULL) // certifica que tem o numero de argumentos necessários
 				{
-					missing_arguments();
+					Missing_Arguments();
 					exit(1);
 				}
 				switch (k)
@@ -191,7 +190,7 @@ void Process_Incoming_Messages(struct Node *other, struct Node *self, struct Nei
 			{
 				if (token == NULL) // certifica que tem o numero de argumentos necessários
 				{
-					missing_arguments();
+					Missing_Arguments();
 					exit(1);
 				}
 				switch (k)
@@ -229,7 +228,7 @@ void Process_Incoming_Messages(struct Node *other, struct Node *self, struct Nei
 			{
 				if (token == NULL) // certifica que tem o numero de argumentos necessários
 				{
-					missing_arguments();
+					Missing_Arguments();
 					exit(1);
 				}
 				if (k == 0)
@@ -268,7 +267,7 @@ void Process_Incoming_Messages(struct Node *other, struct Node *self, struct Nei
 			{
 				if (token == NULL) // certifica que tem o numero de argumentos necessários
 				{
-					missing_arguments();
+					Missing_Arguments();
 					exit(1);
 				}
 				if (k == 0)
@@ -306,7 +305,7 @@ void Process_Incoming_Messages(struct Node *other, struct Node *self, struct Nei
 			int id;
 			if (token == NULL) // certifica que tem o numero de argumentos necessários
 			{
-				missing_arguments();
+				Missing_Arguments();
 				exit(1);
 			}
 			id = atoi(token);

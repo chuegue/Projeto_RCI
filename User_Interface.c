@@ -110,6 +110,7 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 					printf("COULDN'T CONNECT TO IP %s PORT %s\n", commands->bootip, commands->bootport);
 					other->id = -1;
 					other->fd = -1;
+					self->net = -1; // teste aqui
 					return;
 				}
 				else
@@ -126,6 +127,7 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 						printf("COULDN'T CONNECT TO IP %s PORT %s\n", commands->bootip, commands->bootport);
 						other->id = -1;
 						other->fd = -1;
+						self->net = -1; // teste aqui
 						return;
 					}
 					char buffer[128] = {0};
@@ -284,17 +286,17 @@ void leave(struct Node *self, struct Neighborhood *nb, struct Expedition_Table *
 void Invalid_User_Command()
 {
 	printf("The selected command is not valid. Here is a list of the available commands:\n");
-	printf("\tjoin [net] [id]\n");
-	printf("\tdjoin [net] [id] [bootid] [bootip] [bootport]\n");
-	printf("\tcreate [name]\n");
-	printf("\tdelete [name]\n");
-	printf("\tget [dest] [name]\n");
-	printf("\tclear routing (cr)\n");
-	printf("\tshow topology (st)\n");
-	printf("\tshow routing (sr)\n");
-	printf("\tshow names (sn)\n");
-	printf("\tleave\n");
-	printf("\texit\n");
+	printf("\t> join [net] [id]\n");
+	printf("\t> djoin [net] [id] [bootid] [bootip] [bootport]\n");
+	printf("\t> create [name]\n");
+	printf("\t> delete [name]\n");
+	printf("\t> get [dest] [name]\n");
+	printf("\t> clear routing (cr)\n");
+	printf("\t> show topology (st)\n");
+	printf("\t> show routing (sr)\n");
+	printf("\t> show names (sn)\n");
+	printf("\t> leave\n");
+	printf("\t> exit\n");
 }
 
 void Process_User_Commands(char message[128], struct User_Commands *commands, struct Node *self, struct Node *other, struct Neighborhood *nb, struct Expedition_Table *expt, char *nodesip, char *nodesport)
@@ -310,8 +312,8 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 		{
 			if (token == NULL) // certifica que tem o numero de argumentos necessários
 			{
-				missing_arguments();
-				exit(1);
+				Missing_Arguments();
+				Invalid_User_Command();
 			}
 			switch (k)
 			{
@@ -353,13 +355,15 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 	else if (strcmp(token, "djoin") == 0)
 	{
 		token = strtok(NULL, " ");
-		commands->command = 2; /*?*/
+		printf("token: %s \n", token);
+		commands->command = 2;
 		for (int k = 0; k < 5; k++)
 		{
 			if (token == NULL) // certifica que tem o numero de argumentos necessários
 			{
-				missing_arguments();
-				exit(1);
+				Missing_Arguments();
+				Invalid_User_Command();
+				return;
 			}
 			switch (k)
 			{
@@ -384,7 +388,7 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 			default:
 				break;
 			}
-
+			printf("kkkkk\n");
 			token = strtok(NULL, " ");
 		}
 		if (self->net == -1)
@@ -404,8 +408,9 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 		token = strtok(NULL, " ");
 		if (token == NULL)
 		{
-			missing_arguments();
-			exit(1);
+			printf("nao ha nada no create \n");
+			Missing_Arguments();
+			Invalid_User_Command();
 		}
 		if (token[strlen(token) - 1] == '\n')
 			token[strlen(token) - 1] = '\0';
@@ -420,8 +425,8 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 		token = strtok(NULL, " ");
 		if (token == NULL)
 		{
-			missing_arguments();
-			exit(1);
+			Missing_Arguments();
+			Invalid_User_Command();
 		}
 		if (token[strlen(token) - 1] == '\n')
 			token[strlen(token) - 1] = '\0';
@@ -438,8 +443,8 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 		{
 			if (token == NULL) // certifica que tem o numero de argumentos necessários
 			{
-				missing_arguments();
-				exit(1);
+				Missing_Arguments();
+				Invalid_User_Command();
 			}
 			switch (k)
 			{
@@ -501,7 +506,8 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 		token = strtok(NULL, " ");
 		if (token == NULL)
 		{
-			missing_arguments();
+			Missing_Arguments();
+			Invalid_User_Command();
 		}
 		else if (strstr(token, "topology") != NULL)
 		{

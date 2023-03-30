@@ -263,7 +263,9 @@ int main(int argc, char *argv[])
 								close(my_connections[i].fd);
 							}
 							num_connections = 0;
-							max_fd = listen_fd;
+							max_fd = STDIN_FILENO;
+							close(listen_fd);
+							listen_fd = -1;
 							leave(&self, &nb, &expt, nodeip, nodeport);
 						}
 					}
