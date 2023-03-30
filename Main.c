@@ -119,10 +119,13 @@ int main(int argc, char *argv[])
 						max_fd = max(max_fd, other.fd);
 						memcpy(&(my_connections[num_connections++]), &other, sizeof(struct Node));
 					}
-					// Open a TCP port to listen for incoming connections
-					listen_fd = openListenTCP(myport);
-					// Update "self" structure
-					self.fd = listen_fd;
+					if (listen_fd == -1)
+					{
+						// Open a TCP port to listen for incoming connections
+						listen_fd = openListenTCP(myport);
+						// Update "self" structure
+						self.fd = listen_fd;
+					}
 					break;
 				case 2: // djoin
 					if (other.id != -1)
@@ -130,10 +133,13 @@ int main(int argc, char *argv[])
 						max_fd = max(max_fd, other.fd);
 						memcpy(&(my_connections[num_connections++]), &other, sizeof(struct Node));
 					}
-					// Open a TCP port to listen for incoming connections
-					listen_fd = openListenTCP(myport);
-					// Update "self" structure
-					self.fd = listen_fd;
+					if (listen_fd == -1)
+					{
+						// Open a TCP port to listen for incoming connections
+						listen_fd = openListenTCP(myport);
+						// Update "self" structure
+						self.fd = listen_fd;
+					}
 					break;
 				case 3: // create
 					list = Add_Beginning_List(list, usercomms.name);
@@ -237,7 +243,7 @@ int main(int argc, char *argv[])
 				{
 					FD_CLR(my_connections[i].fd, &rfds);
 					memset(incoming_message, 0, sizeof incoming_message);
-					n = read(my_connections[i].fd, incoming_message, 1024);
+					n = read(my_connections[i].fd, incoming_message, 256);
 					if (n > 0)
 					{
 						Process_Incoming_Messages(&(my_connections[i]), &self, &nb, &expt, incoming_message, list);

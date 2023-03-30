@@ -246,18 +246,21 @@ void join(struct User_Commands *commands, struct Node *self, struct Node *other,
 		djoin(commands, self, other, nb, expt);
 	}
 	free(received);
-	memset(buffer, 0, sizeof buffer);
-	sprintf(buffer, "REG %03i %02i %.32s %.8s", commands->net, commands->id, self->ip, self->port);
-	printf("EU ---> SERVIDOR DE NOS: %s\n", buffer);
-	received = transrecieveUDP(nodesip, nodesport, buffer, strlen(buffer), &n_received);
-	if (strcmp(received, "OKREG") != 0)
+	if (self->net != -1)
 	{
+		memset(buffer, 0, sizeof buffer);
+		sprintf(buffer, "REG %03i %02i %.32s %.8s", commands->net, commands->id, self->ip, self->port);
+		printf("EU ---> SERVIDOR DE NOS: %s\n", buffer);
+		received = transrecieveUDP(nodesip, nodesport, buffer, strlen(buffer), &n_received);
+		if (strcmp(received, "OKREG") != 0)
+		{
+			free(received);
+			printf("ERRO: REG NÃO RESPONDEU OKREG\nRESPONDEU %s\n", received);
+			exit(1);
+		}
+		printf("EU <--- SERVIDOR DE NOS: %s\n", received);
 		free(received);
-		printf("ERRO: REG NÃO RESPONDEU OKREG\nRESPONDEU %s\n", received);
-		exit(1);
 	}
-	printf("EU <--- SERVIDOR DE NOS: %s\n", received);
-	free(received);
 }
 
 void leave(struct Node *self, struct Neighborhood *nb, struct Expedition_Table *expt, char *nodesip, char *nodesport)
@@ -301,259 +304,235 @@ void Invalid_User_Command()
 
 void Process_User_Commands(char message[128], struct User_Commands *commands, struct Node *self, struct Node *other, struct Neighborhood *nb, struct Expedition_Table *expt, char *nodesip, char *nodesport)
 {
-	char *token = strtok(message, " ");
-
-	// join net id
-	if (strcmp(token, "join") == 0)
-	{
-		commands->command = 1;
-		token = strtok(NULL, " ");
-		for (int k = 0; k < 2; k++)
-		{
-			if (token == NULL) // certifica que tem o numero de argumentos necessários
-			{
-				Missing_Arguments();
-				Invalid_User_Command();
-			}
-			switch (k)
-			{
-			case 0:
-				commands->net = atoi(token);
-				break;
-			case 1:
-				commands->id = atoi(token);
-				break;
-			default:
-				break;
-			}
-			token = strtok(NULL, " ");
-		}
-		if (!(commands->net > 0 && commands->net <= 999))
-		{
-			printf("Selected net is invalid. Please choose a net between 0 and 999.\n");
-			commands->command = -1;
-			return;
-		}
-		if (!(commands->id > 0 && commands->id <= 99))
-		{
-			printf("Selected id is invalid. Please choose an id between 0 and 99.\n");
-			commands->command = -1;
-			return;
-		}
-		if (self->net == -1)
-			join(commands, self, other, nb, expt, nodesip, nodesport);
-		else
-		{
-			printf("Already in a network\n");
-			commands->command = -1;
-		}
-
-		return;
-	}
-
+	char comm[16] = {0}, bootip[128] = {0}, bootport[8] = {0}, name[128] = {0}, second_arg[8] = {0};
+	int net = -1, id = -1, bootid = -1, dest = -1;
 	// djoin net id bootid bootIP bootTCP
-	else if (strcmp(token, "djoin") == 0)
+	if (sscanf(message, "%5s %d %d %d %128s %8s", comm, &net, &id, &bootid, bootip, bootport) == 6)
 	{
-		token = strtok(NULL, " ");
-		printf("token: %s \n", token);
-		commands->command = 2;
-		for (int k = 0; k < 5; k++)
+		if (strcmp(comm, "djoin") == 0)
 		{
-			if (token == NULL) // certifica que tem o numero de argumentos necessários
+			commands->command = 2;
+			if (!(net > 0 && net <= 999))
 			{
-				Missing_Arguments();
-				Invalid_User_Command();
+				printf("Selected net is invalid. Please choose a net between 0 and 999.\n");
+				commands->command = -1;
 				return;
 			}
-			switch (k)
+			if (!(id > 0 && id <= 99))
 			{
-			case 0:
-				commands->net = atoi(token);
-				break;
-			case 1:
-				commands->id = atoi(token);
-				break;
-			case 2:
-				commands->bootid = atoi(token);
-				break;
-			case 3:
-				strcpy(commands->bootip, token);
-				break;
-			case 4:
-				if (token[strlen(token) - 1] == '\n')
-					token[strlen(token) - 1] = '\0';
-				strcpy(commands->bootport, token);
-				break;
-
-			default:
-				break;
+				printf("Selected id is invalid. Please choose an id between 0 and 99.\n");
+				commands->command = -1;
+				return;
 			}
-			printf("kkkkk\n");
-			token = strtok(NULL, " ");
+			if (!(bootid > 0 && bootid <= 99))
+			{
+				printf("Selected bootid is invalid. Please choose a bootid between 0 and 99.\n");
+				commands->command = -1;
+				return;
+			}
+			commands->net = net;
+			commands->id = id;
+			commands->bootid = bootid;
+			strcpy(commands->bootip, bootip);
+			strcpy(commands->bootport, bootport);
+			if (self->net == -1)
+				djoin(commands, self, other, nb, expt);
+			else
+			{
+				printf("Already in a network\n");
+				commands->command = -1;
+			}
 		}
-		if (self->net == -1)
-			djoin(commands, self, other, nb, expt);
 		else
 		{
-			printf("Already in a network\n");
+			Invalid_User_Command();
 			commands->command = -1;
+			return;
 		}
 		return;
 	}
-
-	// create name
-	else if (strcmp(token, "create") == 0)
+	// join net id
+	else if (sscanf(message, "%4s %d %d", comm, &net, &id) == 3)
 	{
-		commands->command = 3;
-		token = strtok(NULL, " ");
-		if (token == NULL)
+		if (strcmp(comm, "join") == 0)
 		{
-			printf("nao ha nada no create \n");
-			Missing_Arguments();
-			Invalid_User_Command();
+			commands->command = 1;
+			if (!(net > 0 && net <= 999))
+			{
+				printf("Selected net is invalid. Please choose a net between 0 and 999.\n");
+				commands->command = -1;
+				return;
+			}
+			if (!(id > 0 && id <= 99))
+			{
+				printf("Selected id is invalid. Please choose an id between 0 and 99.\n");
+				commands->command = -1;
+				return;
+			}
+			commands->net = net;
+			commands->id = id;
+			if (self->net == -1)
+				join(commands, self, other, nb, expt, nodesip, nodesport);
+			else
+			{
+				printf("Already in a network\n");
+				commands->command = -1;
+			}
 		}
-		if (token[strlen(token) - 1] == '\n')
-			token[strlen(token) - 1] = '\0';
-		strcpy(commands->name, token);
+		else
+		{
+			Invalid_User_Command();
+			commands->command = -1;
+			return;
+		}
 		return;
 	}
-
-	// delete name
-	else if (strcmp(token, "delete") == 0)
-	{
-		commands->command = 4;
-		token = strtok(NULL, " ");
-		if (token == NULL)
-		{
-			Missing_Arguments();
-			Invalid_User_Command();
-		}
-		if (token[strlen(token) - 1] == '\n')
-			token[strlen(token) - 1] = '\0';
-		strcpy(commands->name, token);
-		return;
-	}
-
 	// get dest name
-	else if (strcmp(token, "get") == 0)
+	else if (sscanf(message, "%3s %d %128s", comm, &dest, name) == 3)
 	{
-		commands->command = 5;
-		token = strtok(NULL, " ");
-		for (int k = 0; k < 2; k++)
+		if (strcmp(comm, "get") == 0)
 		{
-			if (token == NULL) // certifica que tem o numero de argumentos necessários
+			commands->command = 5;
+			if (!(id > 0 && id <= 99))
 			{
-				Missing_Arguments();
-				Invalid_User_Command();
+				printf("Selected id is invalid. Please choose an id between 0 and 99.\n");
+				commands->command = -1;
+				return;
 			}
-			switch (k)
+			other->id = -1; // nao apagar, esta aqui por uma razao
+			if (self->net != -1)
 			{
-			case 0:
-				commands->id = atoi(token);
-				break;
-			case 1:
-				if (token[strlen(token) - 1] == '\n')
-					token[strlen(token) - 1] = '\0';
-				strcpy(commands->name, token);
-				break;
-			default:
-				break;
+				if (commands->id != self->id)
+					Send_Query(commands->id, self->id, commands->name, other, nb, expt);
 			}
-			token = strtok(NULL, " ");
 		}
-		other->id = -1; // nao apagar, esta aqui por uma razao
-		if (self->net != -1)
+		else
 		{
-			if (commands->id != self->id)
-				Send_Query(commands->id, self->id, commands->name, other, nb, expt);
+			Invalid_User_Command();
+			commands->command = -1;
+			return;
 		}
 		return;
 	}
-	else if (strcmp(token, "clear") == 0)
+	// create name / delete name / show topology / show routing / show names / clear routing
+	else if (sscanf(message, "%6s %128s", comm, name) == 2)
 	{
-		token = strtok(NULL, " ");
-		if (strstr(token, "routing") != NULL)
+		if (strcmp(comm, "create") == 0)
+		{
+			commands->command = 3;
+			strcpy(commands->name, name);
+			return;
+		}
+		else if (strcmp(comm, "delete") == 0)
+		{
+			commands->command = 4;
+			strcpy(commands->name, name);
+			return;
+		}
+		else if (strcmp(comm, "show") == 0)
+		{
+			if (strcmp(name, "topology") == 0)
+			{
+				commands->command = 6;
+				return;
+			}
+			else if (strcmp(name, "routing") == 0)
+			{
+				commands->command = 8;
+				return;
+			}
+			else if (strcmp(name, "names") == 0)
+			{
+				commands->command = 7;
+				return;
+			}
+			else
+			{
+				Invalid_User_Command();
+				commands->command = -1;
+			}
+		}
+		else if (strcmp(comm, "clear"))
+		{
+			if (strcmp(name, "routing") == 0)
+			{
+				commands->command = 11;
+				memset(expt->forward, -1, 100 * sizeof(int));
+				return;
+			}
+			else
+			{
+				Invalid_User_Command();
+				commands->command = -1;
+				return;
+			}
+		}
+		else
+		{
+			Invalid_User_Command();
+			commands->command = -1;
+			return;
+		}
+	}
+	// leave / exit / cr / st / sr / sn
+	else if (sscanf(message, "%5s", comm) == 1)
+	{
+		if (strcmp(comm, "leave") == 0)
+		{
+			if (self->net != -1)
+			{
+				commands->command = 9;
+				leave(self, nb, expt, nodesip, nodesport);
+			}
+			else
+			{
+				printf("You are not in a network!\n");
+				commands->command = -1;
+			}
+		}
+		else if (strcmp(comm, "exit") == 0)
+		{
+			commands->command = 10;
+			if (self->net != -1)
+			{
+				leave(self, nb, expt, nodesip, nodesport);
+			}
+			return;
+		}
+		else if (strcmp(comm, "cr") == 0)
 		{
 			commands->command = 11;
 			memset(expt->forward, -1, 100 * sizeof(int));
+			return;
 		}
-		return;
-	}
-	else if (strstr(message, "cr") != NULL)
-	{
-		commands->command = 11;
-		memset(expt->forward, -1, 100 * sizeof(int));
-		return;
-	}
-	else if (strstr(message, "st") != NULL)
-	{
-		commands->command = 6;
-		return;
-	}
-	else if (strstr(message, "sn") != NULL)
-	{
-		commands->command = 7;
-		return;
-	}
-	else if (strstr(message, "sr") != NULL)
-	{
-		commands->command = 8;
-		return;
-	}
-	// show topology || show names || show routing
-	else if (strcmp(token, "show") == 0)
-	{
-		token = strtok(NULL, " ");
-		if (token == NULL)
-		{
-			Missing_Arguments();
-			Invalid_User_Command();
-		}
-		else if (strstr(token, "topology") != NULL)
+		else if (strcmp(comm, "st") == 0)
 		{
 			commands->command = 6;
 			return;
 		}
-		else if (strstr(token, "names") != NULL)
-		{
-			commands->command = 7;
-			return;
-		}
-		else if (strstr(token, "routing") != NULL)
+		else if (strcmp(comm, "sr") == 0)
 		{
 			commands->command = 8;
 			return;
 		}
-		else
+		else if (strcmp(comm, "sn") == 0)
 		{
-			printf("Not valid! \n");
-		}
-	}
-	else if (strstr(message, "leave") != NULL)
-	{
-		if (self->net != -1)
-		{
-			commands->command = 9;
-			leave(self, nb, expt, nodesip, nodesport);
+			commands->command = 7;
+			return;
 		}
 		else
 		{
-			printf("You are not in a network!\n");
+			Invalid_User_Command();
 			commands->command = -1;
+			return;
 		}
 		return;
 	}
-
-	else if (strstr(message, "exit") != NULL)
-	{
-		commands->command = 10;
-		if (self->net != -1)
-			leave(self, nb, expt, nodesip, nodesport);
-		return;
-	}
+	// caca
 	else
 	{
 		Invalid_User_Command();
 		commands->command = -1;
+		return;
 	}
 }

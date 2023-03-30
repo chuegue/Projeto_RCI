@@ -85,6 +85,8 @@ void Clean_Neighborhood(struct Neighborhood *nb)
 void Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neighborhood *nb, struct Expedition_Table *expt, char incoming_message[128], List *list)
 {
 	strcat(other->buffer, incoming_message);
+	int id, dest, orig;
+	char ip[64] = {0}, port[8] = {0}, name[128] = {0};
 	while (strstr(other->buffer, "\n") != NULL)
 	{
 		char processed_message[128] = {0};
@@ -107,31 +109,28 @@ void Process_Incoming_Messages(struct Node *other, struct Node *self, struct Nei
 		char holder[128] = {0};
 		strcpy(holder, processed_message);
 		char *token = strtok(processed_message, " ");
-		if (strcmp(token, "NEW") == 0)
+		char aux[1024] = {0};
+		strcpy(aux, token);
+		// memmove(processed_message, processed_message + strlen(token) + 1, strlen(processed_message) - strlen(token) + 1);
+		int i;
+		for (i = 0; processed_message[i + strlen(aux) + 1] != '\0' && i < sizeof processed_message; i++)
 		{
-			token = strtok(NULL, " ");
-			for (int k = 0; k < 3; k++)
+			processed_message[i] = processed_message[i + strlen(aux) + 1];
+		}
+		processed_message[i] = '\0';
+		if (strcmp(aux, "NEW") == 0)
+		{
+			if (sscanf(processed_message, "%d %64s %8s", &id, ip, port) == 3)
 			{
-				if (token == NULL) // certifica que tem o numero de argumentos necessários
-				{
-					Missing_Arguments();
-					exit(1);
-				}
-				switch (k)
-				{
-				case 0:
-					other->id = atoi(token);
-					break;
-				case 1:
-					strcpy(other->ip, token);
-					break;
-				case 2:
-					if (token[strlen(token) - 1] == '\n')
-						token[strlen(token) - 1] = '\0';
-					strcpy(other->port, token);
-					break;
-				}
-				token = strtok(NULL, " ");
+				other->id = id;
+				strcpy(other->ip, ip);
+				if (port[strlen(port) - 1] == '\n')
+					port[strlen(port) - 1] = '\0';
+				strcpy(other->port, port);
+			}
+			else
+			{
+				continue;
 			}
 			printf("EU <--- ID nº%i: %s\n", other->id, holder);
 			if (nb->external.id == self->id) // tou sozinho, quero ancora
@@ -151,63 +150,32 @@ void Process_Incoming_Messages(struct Node *other, struct Node *self, struct Nei
 			}
 			printf("EU ---> ID nº%i: %s\n", other->id, outgoing_message);
 		}
-		else if (strcmp(token, "EXTERN") == 0)
+		else if (strcmp(aux, "EXTERN") == 0)
 		{
-			token = strtok(NULL, " ");
-			int e = -1;
-			for (int k = 0; k < 3; k++)
+			if (sscanf(processed_message, "%d %64s %8s", &id, ip, port) == 3)
 			{
-				if (token == NULL) // certifica que tem o numero de argumentos necessários
-				{
-					Missing_Arguments();
-					exit(1);
-				}
-				switch (k)
-				{
-				case 0:
-					e = atoi(token);
-					nb->backup.id = e;
-					break;
-				case 1:
-					strcpy(nb->backup.ip, token);
-					break;
-				case 2:
-					if (token[strlen(token) - 1] == '\n')
-						token[strlen(token) - 1] = '\0';
-					strcpy(nb->backup.port, token);
-					break;
-				}
-				token = strtok(NULL, " ");
+				nb->backup.id = id;
+				strcpy(nb->backup.ip, ip);
+				if (port[strlen(port) - 1] == '\n')
+					port[strlen(port) - 1] = '\0';
+				strcpy(nb->backup.port, port);
+			}
+			else
+			{
+				continue;
 			}
 			printf("EU <--- ID nº%i: %s\n", other->id, holder);
 		}
-		else if (strcmp(token, "QUERY") == 0)
+		else if (strcmp(aux, "QUERY") == 0)
 		{
-			int dest = -1, orig = -1;
-			char name[128];
-			token = strtok(NULL, " ");
-			for (int k = 0; k < 3; k++)
+			if (sscanf(processed_message, "%d %d %128s", &dest, &orig, name) == 3)
 			{
-				if (token == NULL) // certifica que tem o numero de argumentos necessários
-				{
-					Missing_Arguments();
-					exit(1);
-				}
-				switch (k)
-				{
-				case 0:
-					dest = atoi(token);
-					break;
-				case 1:
-					orig = atoi(token);
-					break;
-				case 2:
-					if (token[strlen(token) - 1] == '\n')
-						token[strlen(token) - 1] = '\0';
-					strcpy(name, token);
-					break;
-				}
-				token = strtok(NULL, " ");
+				if (name[strlen(name) - 1] == '\n')
+					name[strlen(name) - 1] = '\0';
+			}
+			else
+			{
+				continue;
 			}
 			expt->forward[orig] = other->id;
 			printf("EU <--- ID nº%i: %s\n", other->id, holder);
@@ -220,26 +188,11 @@ void Process_Incoming_Messages(struct Node *other, struct Node *self, struct Nei
 				Send_Query(dest, orig, name, other, nb, expt);
 			}
 		}
-		else if (strcmp(token, "CONTENT") == 0)
+		else if (strcmp(aux, "CONTENT") == 0)
 		{
-			int dest = -1, orig = -1;
-			token = strtok(NULL, " ");
-			for (int k = 0; k < 3; k++)
+			if (sscanf(processed_message, "%d %d %128s", &dest, &orig, name) != 3)
 			{
-				if (token == NULL) // certifica que tem o numero de argumentos necessários
-				{
-					Missing_Arguments();
-					exit(1);
-				}
-				if (k == 0)
-				{
-					dest = atoi(token);
-				}
-				else if (k == 1)
-				{
-					orig = atoi(token);
-				}
-				token = strtok(NULL, " ");
+				continue;
 			}
 			expt->forward[orig] = other->id;
 			printf("EU <--- ID nº%i: %s\n", other->id, holder);
@@ -256,34 +209,18 @@ void Process_Incoming_Messages(struct Node *other, struct Node *self, struct Nei
 			else
 			{
 				expt->forward[orig] = other->id;
-				printf("sir i received the content as it was intended\n");
 			}
 		}
-		else if (strcmp(token, "NOCONTENT") == 0)
+		else if (strcmp(aux, "NOCONTENT") == 0)
 		{
-			int dest = -1, orig = -1;
-			token = strtok(NULL, " ");
-			for (int k = 0; k < 3; k++)
+			if (sscanf(processed_message, "%d %d %128s", &dest, &orig, name) != 3)
 			{
-				if (token == NULL) // certifica que tem o numero de argumentos necessários
-				{
-					Missing_Arguments();
-					exit(1);
-				}
-				if (k == 0)
-				{
-					dest = atoi(token);
-				}
-				else if (k == 1)
-				{
-					orig = atoi(token);
-				}
-				token = strtok(NULL, " ");
+				continue;
 			}
+			expt->forward[orig] = other->id;
 			printf("EU <--- ID nº%i: %s\n", other->id, holder);
 			if (dest != self->id)
 			{
-				expt->forward[orig] = other->id;
 				int neighbour_fd = Gimme_Fd(expt->forward[dest], nb);
 				if (write(neighbour_fd, holder, strlen(holder)) == -1)
 				{
@@ -295,21 +232,19 @@ void Process_Incoming_Messages(struct Node *other, struct Node *self, struct Nei
 			else
 			{
 				expt->forward[orig] = other->id;
-				printf("sir i received the nocontent as it was intended\n");
 			}
 		}
-		else if (strcmp(token, "WITHDRAW") == 0)
+		else if (strcmp(aux, "WITHDRAW") == 0)
 		{
-			printf("EU <--- ID nº%i: %s\n", other->id, holder);
-			token = strtok(NULL, " ");
-			int id;
-			if (token == NULL) // certifica que tem o numero de argumentos necessários
+			if (sscanf(processed_message, "%d", &id) != 1)
 			{
-				Missing_Arguments();
-				exit(1);
+				printf("EU <--- ID nº%i: %s\n", other->id, holder);
+				Withdraw(other->id, id, nb, expt);
 			}
-			id = atoi(token);
-			Withdraw(other->id, id, nb, expt);
+			else
+			{
+				continue;
+			}
 		}
 	}
 }
