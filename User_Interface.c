@@ -281,6 +281,22 @@ void leave(struct Node *self, struct Neighborhood *nb, struct Expedition_Table *
 	self->net = -1;
 }
 
+void Invalid_User_Command()
+{
+	printf("The selected command is not valid. Here is a list of the available commands:\n");
+	printf("\tjoin [net] [id]\n");
+	printf("\tdjoin [net] [id] [bootid] [bootip] [bootport]\n");
+	printf("\tcreate [name]\n");
+	printf("\tdelete [name]\n");
+	printf("\tget [dest] [name]\n");
+	printf("\tclear routing (cr)\n");
+	printf("\tshow topology (st)\n");
+	printf("\tshow routing (sr)\n");
+	printf("\tshow names (sn)\n");
+	printf("\tleave\n");
+	printf("\texit\n");
+}
+
 void Process_User_Commands(char message[128], struct User_Commands *commands, struct Node *self, struct Node *other, struct Neighborhood *nb, struct Expedition_Table *expt, char *nodesip, char *nodesport)
 {
 	char *token = strtok(message, " ");
@@ -310,6 +326,18 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 			}
 			token = strtok(NULL, " ");
 		}
+		if (!(commands->net > 0 && commands->net <= 999))
+		{
+			printf("Selected net is invalid. Please choose a net between 0 and 999.\n");
+			commands->command = -1;
+			return;
+		}
+		if (!(commands->id > 0 && commands->id <= 99))
+		{
+			printf("Selected id is invalid. Please choose an id between 0 and 99.\n");
+			commands->command = -1;
+			return;
+		}
 		if (self->net == -1)
 			join(commands, self, other, nb, expt, nodesip, nodesport);
 		else
@@ -317,6 +345,7 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 			printf("Already in a network\n");
 			commands->command = -1;
 		}
+
 		return;
 	}
 
@@ -518,6 +547,7 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 	}
 	else
 	{
+		Invalid_User_Command();
 		commands->command = -1;
 	}
 }
