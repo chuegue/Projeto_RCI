@@ -23,7 +23,7 @@
 int main(int argc, char *argv[])
 {
 	// Declare variables
-	int max_fd, counter, listen_fd, comms_fd, n, num_connections = 0;
+	int max_fd, counter, listen_fd, comms_fd, n, num_connections = 0, check_lista;
 	char buffer[128], myip[128], myport[128], nodeip[128], nodeport[128], incoming_message[1024];
 	struct User_Commands usercomms;
 	struct Node my_connections[100] = {0};
@@ -32,6 +32,7 @@ int main(int argc, char *argv[])
 		my_connections[i].fd = my_connections[i].id = -1;
 	}
 	struct Node self, other = {0};
+	self.net = self.id = -1;
 	struct Neighborhood nb = {0};
 	nb.external.id = nb.external.fd = nb.backup.id = nb.backup.fd = -1;
 	for (int i = 0; i < 100; i++)
@@ -55,14 +56,10 @@ int main(int argc, char *argv[])
 	strcpy(self.ip, myip);
 	strcpy(self.port, myport);
 
-	// Open a TCP port to listen for incoming connections
-	listen_fd = openListenTCP(myport);
-
-	// Update "self" structure
-	self.fd = listen_fd;
+	listen_fd = -1;
 
 	// set max_fd to listen_fd
-	max_fd = listen_fd;
+	max_fd = STDIN_FILENO;
 
 	// Main loop
 	while (1)
@@ -70,7 +67,10 @@ int main(int argc, char *argv[])
 		// Set the standard input and listen fd's to be listened
 		FD_ZERO(&rfds);
 		FD_SET(STDIN_FILENO, &rfds);
-		FD_SET(listen_fd, &rfds);
+		if (listen_fd != -1)
+		{
+			FD_SET(listen_fd, &rfds);
+		}
 		max_fd = max(max_fd, listen_fd);
 		timeout.tv_sec = 1;
 		timeout.tv_usec = 0;
@@ -119,6 +119,10 @@ int main(int argc, char *argv[])
 						max_fd = max(max_fd, other.fd);
 						memcpy(&(my_connections[num_connections++]), &other, sizeof(struct Node));
 					}
+					// Open a TCP port to listen for incoming connections
+					listen_fd = openListenTCP(myport);
+					// Update "self" structure
+					self.fd = listen_fd;
 					break;
 				case 2: // djoin
 					if (other.id != -1)
@@ -126,12 +130,26 @@ int main(int argc, char *argv[])
 						max_fd = max(max_fd, other.fd);
 						memcpy(&(my_connections[num_connections++]), &other, sizeof(struct Node));
 					}
+					// Open a TCP port to listen for incoming connections
+					listen_fd = openListenTCP(myport);
+					// Update "self" structure
+					self.fd = listen_fd;
 					break;
 				case 3: // create
 					list = Add_Beginning_List(list, usercomms.name);
+					printf("Added content with name %s to the Names List\n", usercomms.name);
 					break;
 				case 4: // delete
-					list = Delete_At_Index_Lista(list, Search_Item_List(list, usercomms.name));
+					check_lista = Search_Item_List(list, usercomms.name);
+					if (check_lista < 0)
+					{
+						printf("There is no content with name %s  in the Names List\n", usercomms.name);
+					}
+					else
+					{
+						list = Delete_At_Index_Lista(list, check_lista);
+						printf("Deleted content with name %s of the Names List\n", usercomms.name);
+					}
 					break;
 				case 6: // show topology
 					if (self.net != -1)
@@ -143,7 +161,7 @@ int main(int argc, char *argv[])
 					{
 						printf("You are not in a network! \n");
 					}
-
+					break;
 				case 7: // show names
 					printf("------ NAMES ------  \n");
 					Print_List(list);
@@ -152,22 +170,28 @@ int main(int argc, char *argv[])
 					if (self.net != -1)
 					{
 						Show_Routing(&expt);
-						break;
 					}
 					else
 					{
 						printf("You are not in a network! \n");
 					}
-
+					break;
 				case 9: // leave
 					for (int i = 0; i < num_connections; i++)
 					{
 						close(my_connections[i].fd);
 					}
 					num_connections = 0;
-					max_fd = listen_fd;
+					max_fd = STDIN_FILENO;
+					close(listen_fd);
+					listen_fd = -1;
 					break;
 				case 10: // exit
+					if (listen_fd)
+					{
+						close(listen_fd);
+						listen_fd = -1;
+					}
 					Free_List(list);
 					exit(0);
 					break;

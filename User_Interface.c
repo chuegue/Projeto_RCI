@@ -244,21 +244,18 @@ void join(struct User_Commands *commands, struct Node *self, struct Node *other,
 		djoin(commands, self, other, nb, expt);
 	}
 	free(received);
-	if (other->id != -1)
+	memset(buffer, 0, sizeof buffer);
+	sprintf(buffer, "REG %03i %02i %.32s %.8s", commands->net, commands->id, self->ip, self->port);
+	printf("EU ---> SERVIDOR DE NOS: %s\n", buffer);
+	received = transrecieveUDP(nodesip, nodesport, buffer, strlen(buffer), &n_received);
+	if (strcmp(received, "OKREG") != 0)
 	{
-		memset(buffer, 0, sizeof buffer);
-		sprintf(buffer, "REG %03i %02i %.32s %.8s", commands->net, commands->id, self->ip, self->port);
-		printf("EU ---> SERVIDOR DE NOS: %s\n", buffer);
-		received = transrecieveUDP(nodesip, nodesport, buffer, strlen(buffer), &n_received);
-		if (strcmp(received, "OKREG") != 0)
-		{
-			free(received);
-			printf("ERRO: REG NÃO RESPONDEU OKREG\nRESPONDEU %s\n", received);
-			exit(1);
-		}
-		printf("EU <--- SERVIDOR DE NOS: %s\n", received);
 		free(received);
+		printf("ERRO: REG NÃO RESPONDEU OKREG\nRESPONDEU %s\n", received);
+		exit(1);
 	}
+	printf("EU <--- SERVIDOR DE NOS: %s\n", received);
+	free(received);
 }
 
 void leave(struct Node *self, struct Neighborhood *nb, struct Expedition_Table *expt, char *nodesip, char *nodesport)
@@ -315,6 +312,11 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 		}
 		if (self->net == -1)
 			join(commands, self, other, nb, expt, nodesip, nodesport);
+		else
+		{
+			printf("Already in a network\n");
+			commands->command = -1;
+		}
 		return;
 	}
 
@@ -358,6 +360,11 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 		}
 		if (self->net == -1)
 			djoin(commands, self, other, nb, expt);
+		else
+		{
+			printf("Already in a network\n");
+			commands->command = -1;
+		}
 		return;
 	}
 
@@ -489,15 +496,28 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 	}
 	else if (strstr(message, "leave") != NULL)
 	{
-		commands->command = 9;
-		leave(self, nb, expt, nodesip, nodesport);
+		if (self->net != -1)
+		{
+			commands->command = 9;
+			leave(self, nb, expt, nodesip, nodesport);
+		}
+		else
+		{
+			printf("You are not in a network!\n");
+			commands->command = -1;
+		}
 		return;
 	}
 
 	else if (strstr(message, "exit") != NULL)
 	{
 		commands->command = 10;
-		leave(self, nb, expt, nodesip, nodesport);
+		if (self->net != -1)
+			leave(self, nb, expt, nodesip, nodesport);
 		return;
+	}
+	else
+	{
+		commands->command = -1;
 	}
 }
