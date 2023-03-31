@@ -23,7 +23,7 @@
 int main(int argc, char *argv[])
 {
 	// Declare variables
-	int max_fd, counter, listen_fd, comms_fd, n, num_connections = 0, check_lista;
+	int max_fd, counter, listen_fd, comms_fd, n, num_connections = 0, check_lista, social = 0;
 	char buffer[128], myip[128], myport[128], nodeip[128], nodeport[128], incoming_message[1024];
 	struct User_Commands usercomms;
 	struct Node my_connections[100] = {0};
@@ -51,6 +51,7 @@ int main(int argc, char *argv[])
 
 	// Process console arguments
 	Process_Console_Arguments(argc, argv, myip, myport, nodeip, nodeport);
+	// TODO: ver se os argumentos estão certos. se nao estiverem, dar exit
 
 	// Update "self" structure
 	strcpy(self.ip, myip);
@@ -90,9 +91,16 @@ int main(int argc, char *argv[])
 				if (my_connections[i].fd != -1 && my_connections[i].id == -1)
 				{
 					close(my_connections[i].fd);
-					printf("FECHEI A LIGAÇÃO COM UM NÓ QUE NÃO ME MANDOU \"NEW\" ANTES DO TIMEOUT\n");
+					printf("Closed a connection with a Node that didn't send \"NEW\" before timing out\n");
 					memcpy(&(my_connections[i]), &(my_connections[--num_connections]), sizeof(struct Node));
 					my_connections[num_connections].fd = my_connections[num_connections].id = -1;
+				}
+				if (my_connections[i].net == -10) // só mandou garbage
+				{
+					printf("Closed a connection with a Node that sent too much garbage\n");
+					close(my_connections[i].fd);
+					my_connections[i].net = -1;
+					Leaving_Neighbour(&self, &my_connections[i], &nb, &expt, my_connections, &num_connections);
 				}
 			}
 		}
@@ -108,12 +116,13 @@ int main(int argc, char *argv[])
 			FD_CLR(STDIN_FILENO, &rfds);
 			if (fgets(buffer, 128, stdin))
 			{
-				Process_User_Commands(buffer, &usercomms, &self, &other, &nb, &expt, nodeip, nodeport);
+				Process_User_Commands(buffer, &usercomms, &self, &other, &nb, &expt, nodeip, nodeport, social);
 
 				// According to the command given by the users, do what needs to be done to each of them
 				switch (usercomms.command)
 				{
 				case 1: // join
+					social = 1;
 					if (other.id != -1)
 					{
 						max_fd = max(max_fd, other.fd);
@@ -128,6 +137,7 @@ int main(int argc, char *argv[])
 					}
 					break;
 				case 2: // djoin
+					social = 0;
 					if (other.id != -1)
 					{
 						max_fd = max(max_fd, other.fd);
@@ -272,7 +282,7 @@ int main(int argc, char *argv[])
 							max_fd = STDIN_FILENO;
 							close(listen_fd);
 							listen_fd = -1;
-							leave(&self, &nb, &expt, nodeip, nodeport);
+							leave(&self, &nb, &expt, nodeip, nodeport, social);
 						}
 					}
 					else if (n == -1)

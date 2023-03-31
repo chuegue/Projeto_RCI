@@ -59,15 +59,6 @@ int Gimme_Fd(int wanted_id, struct Neighborhood *nb)
 	return -1;
 }
 
-void Change_Node(struct Node *this_to, struct Node *that)
-{
-	that->net = this_to->net;
-	that->id = this_to->id;
-	strcpy(that->ip, this_to->ip);
-	strcpy(that->port, this_to->port);
-	that->fd = this_to->fd;
-}
-
 void Clean_Neighborhood(struct Neighborhood *nb)
 {
 	memset(nb, -1, sizeof(struct Neighborhood));
@@ -85,6 +76,11 @@ void Clean_Neighborhood(struct Neighborhood *nb)
 void Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neighborhood *nb, struct Expedition_Table *expt, char incoming_message[128], List *list)
 {
 	strcat(other->buffer, incoming_message);
+	if (strlen(other->buffer) >= sizeof(other->buffer) - 258 && strstr(other->buffer, "\n") == NULL)
+	{
+		memset(other->buffer, 0, sizeof(other->buffer));
+		other->net = -10;
+	}
 	int id, dest, orig;
 	char ip[64] = {0}, port[8] = {0}, name[128] = {0};
 	while (strstr(other->buffer, "\n") != NULL)

@@ -29,7 +29,6 @@ int openListenTCP(char *port);
 void Process_Console_Arguments(int argc, char *argv[], char myip[128], char myport[128], char nodeip[128], char nodeport[128]);
 void Missing_Arguments();
 int Gimme_Fd(int wanted_id, struct Neighborhood *nb);
-void Change_Node(struct Node *this_to, struct Node *that);
 void Clean_Neighborhood(struct Neighborhood *nb);
 void Process_Incoming_Messages(struct Node *other, struct Node *self, struct Neighborhood *nb, struct Expedition_Table *expt, char incoming_message[128], List *list);
 

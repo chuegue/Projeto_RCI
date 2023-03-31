@@ -22,17 +22,62 @@ char *transrecieveUDP(char *ip, char *port, char *m_tosend, unsigned int n_send,
 		strerror(errcode);
 		exit(1);
 	}
+
+	// set socket timeout for sending
+	struct timeval send_tv;
+	send_tv.tv_sec = 1; // 1 second timeout for sending
+	send_tv.tv_usec = 0;
+	if (setsockopt(fd_udp, SOL_SOCKET, SO_SNDTIMEO, &send_tv, sizeof(send_tv)) < 0)
+	{
+		perror("Error setting socket timeout for sending");
+		exit(1);
+	}
+
 	n = sendto(fd_udp, m_tosend, n_send, 0, res->ai_addr, res->ai_addrlen);
 	freeaddrinfo(res);
-	if (n == -1) /*error*/
+	if (n == -1)
+	{
+		if (errno == EAGAIN || errno == EWOULDBLOCK)
+		{
+			printf("Timeout while connecting to the Nodes Server with IP %s and UDP port %s.\n", ip, port);
+			printf("Please try again with a different IP and/or port.\n");
+			return (char *)NULL;
+		}
+		else
+		{
+			printf("error: %s\n", strerror(errno));
+		}
 		exit(1);
+	}
+
+	// set socket timeout for receiving
+	struct timeval recv_tv;
+	recv_tv.tv_sec = 1; // 1 second timeout for receiving
+	recv_tv.tv_usec = 0;
+	if (setsockopt(fd_udp, SOL_SOCKET, SO_RCVTIMEO, &recv_tv, sizeof(recv_tv)) < 0)
+	{
+		perror("Error setting socket timeout for receiving");
+		exit(1);
+	}
+
 	char *buffer = (char *)calloc((256 << 5), sizeof(char));
 	addrlen = sizeof(addr);
-	n = recvfrom(fd_udp, buffer, 256 << 5, 0,
-				 (struct sockaddr *)&addr, &addrlen);
+	n = recvfrom(fd_udp, buffer, 256 << 5, 0, (struct sockaddr *)&addr, &addrlen);
 	close(fd_udp);
-	if (n == -1) /*error*/
+	if (n == -1)
+	{
+		if (errno == EAGAIN || errno == EWOULDBLOCK)
+		{
+			printf("Timeout while receiving data from the Nodes Server with IP %s and UDP port %s.\n", ip, port);
+			printf("Please try again with a different IP and/or port.\n");
+			return (char *)NULL;
+		}
+		else
+		{
+			printf("error: %s\n", strerror(errno));
+		}
 		exit(1);
+	}
 	char *ret = (char *)calloc(strlen(buffer) + 1, sizeof(char));
 	strcpy(ret, buffer);
 	free(buffer);
@@ -188,6 +233,8 @@ void join(struct User_Commands *commands, struct Node *self, struct Node *other,
 	memset(ids, -1, 100 * sizeof(int));
 	sprintf(buffer, "NODES %03i", commands->net);
 	received = transrecieveUDP(nodesip, nodesport, buffer, strlen(buffer), &n_received);
+	if (received == (char *)NULL)
+		return;
 	memset(buffer, 0, sizeof buffer);
 	sprintf(buffer, "NODESLIST %03i", commands->net);
 	tok = strtok(received, "\n");
@@ -252,6 +299,8 @@ void join(struct User_Commands *commands, struct Node *self, struct Node *other,
 		sprintf(buffer, "REG %03i %02i %.32s %.8s", commands->net, commands->id, self->ip, self->port);
 		printf("EU ---> SERVIDOR DE NOS: %s\n", buffer);
 		received = transrecieveUDP(nodesip, nodesport, buffer, strlen(buffer), &n_received);
+		if (received == (char *)NULL)
+			return;
 		if (strcmp(received, "OKREG") != 0)
 		{
 			free(received);
@@ -263,24 +312,28 @@ void join(struct User_Commands *commands, struct Node *self, struct Node *other,
 	}
 }
 
-void leave(struct Node *self, struct Neighborhood *nb, struct Expedition_Table *expt, char *nodesip, char *nodesport)
+void leave(struct Node *self, struct Neighborhood *nb, struct Expedition_Table *expt, char *nodesip, char *nodesport, int social)
 {
-	char message[128];
-	unsigned int n_received;
-
-	// terminação da sessão com o vizinho x
-	sprintf(message, "UNREG %03i %02i", self->net, self->id);
-	printf("EU ---> SERVIDOR DE NOS: %s\n", message);
-	char *received = transrecieveUDP(nodesip, nodesport, message, strlen(message), &n_received);
-	if (strcmp(received, "OKUNREG") != 0)
+	if (social)
 	{
-		free(received);
-		printf("ERRO: UNREG NÃO RESPONDEU OKUNREG\nRESPONDEU %s\n", received);
-		exit(1);
-	}
-	printf("EU <--- SERVIDOR DE NOS: %s\n", received);
-	free(received);
+		char message[128];
+		unsigned int n_received;
 
+		// terminação da sessão com o vizinho x
+		sprintf(message, "UNREG %03i %02i", self->net, self->id);
+		printf("EU ---> SERVIDOR DE NOS: %s\n", message);
+		char *received = transrecieveUDP(nodesip, nodesport, message, strlen(message), &n_received);
+		if (received == (char *)NULL)
+			return;
+		if (strcmp(received, "OKUNREG") != 0)
+		{
+			free(received);
+			printf("ERRO: UNREG NÃO RESPONDEU OKUNREG\nRESPONDEU %s\n", received);
+			exit(1);
+		}
+		printf("EU <--- SERVIDOR DE NOS: %s\n", received);
+		free(received);
+	}
 	Clean_Neighborhood(nb);
 	memset(expt, -1, sizeof(struct Expedition_Table));
 	self->net = -1;
@@ -302,7 +355,7 @@ void Invalid_User_Command()
 	printf("\t> exit\n");
 }
 
-void Process_User_Commands(char message[128], struct User_Commands *commands, struct Node *self, struct Node *other, struct Neighborhood *nb, struct Expedition_Table *expt, char *nodesip, char *nodesport)
+void Process_User_Commands(char message[128], struct User_Commands *commands, struct Node *self, struct Node *other, struct Neighborhood *nb, struct Expedition_Table *expt, char *nodesip, char *nodesport, int social)
 {
 	char comm[16] = {0}, bootip[128] = {0}, bootport[8] = {0}, name[128] = {0};
 	int net = -1, id = -1, bootid = -1, dest = -1;
@@ -482,7 +535,7 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 			if (self->net != -1)
 			{
 				commands->command = 9;
-				leave(self, nb, expt, nodesip, nodesport);
+					leave(self, nb, expt, nodesip, nodesport, social);
 			}
 			else
 			{
@@ -495,7 +548,7 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 			commands->command = 10;
 			if (self->net != -1)
 			{
-				leave(self, nb, expt, nodesip, nodesport);
+					leave(self, nb, expt, nodesip, nodesport, social);
 			}
 			return;
 		}
