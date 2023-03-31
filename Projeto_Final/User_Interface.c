@@ -40,7 +40,7 @@ char *transrecieveUDP(char *ip, char *port, char *m_tosend, unsigned int n_send,
 		if (errno == EAGAIN || errno == EWOULDBLOCK)
 		{
 			printf("»»» Timeout while connecting to the Nodes Server with IP %s and UDP port %s.\n", ip, port);
-			printf("Please try again with a different IP and/or port.\n");
+			printf("Please try again with a different IP and/or port or wait a bit.\n");
 			return (char *)NULL;
 		}
 		else
@@ -166,7 +166,7 @@ void djoin(struct User_Commands *commands, struct Node *self, struct Node *other
 						printf("»»» Couldn't connect to IP %s PORT %s\n", commands->bootip, commands->bootport);
 						other->id = -1;
 						other->fd = -1;
-						self->net = -1; 
+						self->net = -1;
 						return;
 					}
 					char buffer[128] = {0};
@@ -446,6 +446,11 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 				printf("»»» Selected destination ID is invalid. Please choose an ID between 0 and 99.\n");
 				commands->command = -1;
 				return;
+			}
+			if (dest == self->id)
+			{
+				printf("»»» Already in Node with ID %02i. To see this Node's contents, use the comand [show names] ([sn])\n", self->id);
+				commands->command = -1;
 			}
 			other->id = -1; // nao apagar, esta aqui por uma razao
 			if (self->net != -1)
