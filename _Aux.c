@@ -111,13 +111,15 @@ void Process_Incoming_Messages(struct Node *other, struct Node *self, struct Nei
 		char *token = strtok(processed_message, " ");
 		char aux[1024] = {0};
 		strcpy(aux, token);
-		// memmove(processed_message, processed_message + strlen(token) + 1, strlen(processed_message) - strlen(token) + 1);
 		int i;
 		for (i = 0; processed_message[i + strlen(aux) + 1] != '\0' && i < sizeof processed_message; i++)
 		{
 			processed_message[i] = processed_message[i + strlen(aux) + 1];
 		}
-		processed_message[i] = '\0';
+		for (; i < sizeof processed_message; i++)
+			processed_message[i] = 0;
+		if (processed_message[strlen(processed_message) - 1] == '\n')
+			processed_message[strlen(processed_message) - 1] = '\0';
 		if (strcmp(aux, "NEW") == 0)
 		{
 			if (sscanf(processed_message, "%d %64s %8s", &id, ip, port) == 3)
@@ -236,7 +238,7 @@ void Process_Incoming_Messages(struct Node *other, struct Node *self, struct Nei
 		}
 		else if (strcmp(aux, "WITHDRAW") == 0)
 		{
-			if (sscanf(processed_message, "%d", &id) != 1)
+			if (sscanf(processed_message, "%d", &id) == 1)
 			{
 				printf("EU <--- ID nº%i: %s\n", other->id, holder);
 				Withdraw(other->id, id, nb, expt);

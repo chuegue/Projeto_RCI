@@ -304,7 +304,7 @@ void Invalid_User_Command()
 
 void Process_User_Commands(char message[128], struct User_Commands *commands, struct Node *self, struct Node *other, struct Neighborhood *nb, struct Expedition_Table *expt, char *nodesip, char *nodesport)
 {
-	char comm[16] = {0}, bootip[128] = {0}, bootport[8] = {0}, name[128] = {0}, second_arg[8] = {0};
+	char comm[16] = {0}, bootip[128] = {0}, bootport[8] = {0}, name[128] = {0};
 	int net = -1, id = -1, bootid = -1, dest = -1;
 	// djoin net id bootid bootIP bootTCP
 	if (sscanf(message, "%5s %d %d %d %128s %8s", comm, &net, &id, &bootid, bootip, bootport) == 6)
@@ -312,19 +312,19 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 		if (strcmp(comm, "djoin") == 0)
 		{
 			commands->command = 2;
-			if (!(net > 0 && net <= 999))
+			if (!(net >= 0 && net <= 999))
 			{
 				printf("Selected net is invalid. Please choose a net between 0 and 999.\n");
 				commands->command = -1;
 				return;
 			}
-			if (!(id > 0 && id <= 99))
+			if (!(id >= 0 && id <= 99))
 			{
 				printf("Selected id is invalid. Please choose an id between 0 and 99.\n");
 				commands->command = -1;
 				return;
 			}
-			if (!(bootid > 0 && bootid <= 99))
+			if (!(bootid >= 0 && bootid <= 99))
 			{
 				printf("Selected bootid is invalid. Please choose a bootid between 0 and 99.\n");
 				commands->command = -1;
@@ -357,13 +357,13 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 		if (strcmp(comm, "join") == 0)
 		{
 			commands->command = 1;
-			if (!(net > 0 && net <= 999))
+			if (!(net >= 0 && net <= 999))
 			{
 				printf("Selected net is invalid. Please choose a net between 0 and 999.\n");
 				commands->command = -1;
 				return;
 			}
-			if (!(id > 0 && id <= 99))
+			if (!(id >= 0 && id <= 99))
 			{
 				printf("Selected id is invalid. Please choose an id between 0 and 99.\n");
 				commands->command = -1;
@@ -393,17 +393,17 @@ void Process_User_Commands(char message[128], struct User_Commands *commands, st
 		if (strcmp(comm, "get") == 0)
 		{
 			commands->command = 5;
-			if (!(id > 0 && id <= 99))
+			if (!(dest >= 0 && dest <= 99))
 			{
-				printf("Selected id is invalid. Please choose an id between 0 and 99.\n");
+				printf("Selected dest id is invalid. Please choose a dest id between 0 and 99.\n");
 				commands->command = -1;
 				return;
 			}
 			other->id = -1; // nao apagar, esta aqui por uma razao
 			if (self->net != -1)
 			{
-				if (commands->id != self->id)
-					Send_Query(commands->id, self->id, commands->name, other, nb, expt);
+				if (dest != self->id)
+					Send_Query(dest, self->id, name, other, nb, expt);
 			}
 		}
 		else
